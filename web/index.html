@@ -1491,7 +1491,10 @@ $("inImage").onchange = e => {
 };
 
 $("btnMusique").onclick = () => {
-  try { TWSound.debloquer(); TWSound.musique(); } catch {}
+  try {
+    TWSound.debloquer();
+    store.set("tw.musique", TWSound.musique() ? "1" : "0");
+  } catch {}
   majBoutonMusique();
 };
 $("btnSave").onclick = () => {
@@ -1506,6 +1509,26 @@ $("btnSave").onclick = () => {
 function majBoutonMusique() {
   const on = typeof TWSound !== "undefined" && TWSound.musiqueActive;
   $("btnMusique").textContent = "Musique : " + (on ? "en cours" : "arret");
+}
+
+/* La musique demarrait uniquement depuis PRESS START. Un visiteur deja venu
+   saute l'ecran d'accueil : il n'entendait donc jamais rien. On arme un
+   declencheur sur le premier geste, quel qu'il soit. Ce doit etre un geste
+   qui porte une activation utilisateur (relachement, clic, touche) : un
+   pointerdown au doigt n'en porte pas, WebKit le refuse. */
+function armerMusique() {
+  if (store.get("tw.musique", "1") !== "1") return;
+  const evts = ["pointerup", "touchend", "click", "keydown"];
+  const demarrer = () => {
+    try {
+      TWSound.debloquer();
+      if (TWSound.musique(true)) {
+        evts.forEach(e => removeEventListener(e, demarrer, true));
+        majBoutonMusique();
+      }
+    } catch {}
+  };
+  evts.forEach(e => addEventListener(e, demarrer, { capture: true, passive: true }));
 }
 
 function fermerAccueil(pseudo) {
@@ -1558,6 +1581,7 @@ if (SPECTATE) {
 }
 
 renderPalette();
+armerMusique();
 appliquerMode(mode);
 chargerGabarits();
 layout();
