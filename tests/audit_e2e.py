@@ -156,12 +156,69 @@ with sync_playwright() as p:
     pg.screenshot(path="/tmp/claude-1000/-home-jean-dev-monad-blitz/cc002d3c-5e76-41e8-a0e4-efa01c1ee78f/scratchpad/audit.png")
     b.close()
 
-print("\n6. verification onchain")
+# ---------------------------------------------------------------------------
+# Toile partagee : deux navigateurs doivent voir le meme plateau.
+# Ce cas n'etait couvert par aucun test, et c'est exactement la ou le defaut
+# s'est produit : l'adresse du contrat gardee en memoire locale passait avant
+# celle compilee dans la page, donc une machine ayant servi a un test
+# precedent peignait sur une autre toile sans que rien ne le signale.
+# ---------------------------------------------------------------------------
+print("\n6. toile partagee entre deux navigateurs")
+VIEUX = "0x59b670e9fA9D0A427751Af201D676719a970857b"
+with sync_playwright() as p:
+    b = p.chromium.launch()
+    ctxA = b.new_context(); A = ctxA.new_page()
+    ctxB = b.new_context(); B = ctxB.new_page()
+    # B simule une machine polluee par un test precedent.
+    B.add_init_script(f"localStorage.setItem('tw.contract','{VIEUX}');"
+                      "localStorage.setItem('tw.vu','1');")
+    for pg in (A, B):
+        pg.goto(BASE, wait_until="networkidle", timeout=60000)
+    time.sleep(3)
+    try: A.click("#btnStart", timeout=5000)
+    except Exception: pass
+
+    cA = A.evaluate("()=>CFG.CONTRACT")
+    cB = B.evaluate("()=>CFG.CONTRACT")
+    verif("les deux navigateurs visent le meme contrat", cA.lower() == cB.lower(),
+          f"{cA[:10]} / {cB[:10]}")
+    verif("un reglage local perime ne l'emporte pas", cB.lower() == C.lower())
+
+    try:
+        A.wait_for_function("() => credit.textContent !== '00'", timeout=60000)
+    except Exception:
+        pass
+    time.sleep(2)
+    boxA = A.locator("#board").bounding_box(); pasA = boxA["width"] / 48
+    libres = A.evaluate("""()=>{const o=[];for(let i=0;i<2304&&o.length<3;i++)
+        if(!board[i])o.push([i%48,(i/48)|0]);return o}""")
+    for x, y in libres:
+        A.mouse.click(boxA["x"] + (x + .5) * pasA, boxA["y"] + (y + .5) * pasA)
+        time.sleep(.4)
+    envoyees = A.evaluate("()=>+wSent.textContent")
+
+    vu = False
+    for _ in range(9):                      # jusqu'a 45 s de convergence
+        time.sleep(5)
+        idx = [y * 48 + x for x, y in libres]
+        vA = A.evaluate("(i)=>i.map(k=>board[k])", idx)
+        vB = B.evaluate("(i)=>i.map(k=>board[k])", idx)
+        if vA == vB and all(vB):
+            vu = True
+            break
+    verif("ce que A peint apparait chez B", vu and envoyees > 0,
+          f"{envoyees} envoyees, vues par B : {vu}")
+    b.close()
+
+print("\n7. verification onchain")
 time.sleep(4)
 poses = c.functions.claimsOf(joueur.address).call() - avant
 verif("poses confirmees onchain", poses >= 5, f"{poses} poses")
+# Le pseudo part onchain automatiquement des que le wallet est approvisionne :
+# sans cela le classement au videoprojecteur n'afficherait que de
+# l'hexadecimal, ce qui ne dit rien a personne.
 nom = c.functions.names(joueur.address).call().rstrip(b"\x00").decode()
-verif("pseudo pas ecrit onchain sans transaction", nom == "", f"'{nom}' (attendu vide)")
+verif("pseudo inscrit onchain apres financement", nom == pseudo, f"'{nom}'")
 occupees = sum(1 for x in c.functions.getColors().call() if x)
 verif("plateau reflete les poses", occupees >= poses, f"{occupees} cases occupees")
 
