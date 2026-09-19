@@ -497,7 +497,7 @@
       <div class="palette" id="palette">
         <div class="swatches" id="swatches"></div>
         <div class="palrow">
-          <span>Clique ou glisse sur la grille</span>
+          <span>Clique une case pour la peindre</span>
           <b id="curName">&mdash;</b>
         </div>
       </div>
@@ -1303,26 +1303,27 @@ function cellAt(ev) {
   return y * W + x;
 }
 
-let painting = false, lastCell = -1;
-function tryPaint(ev) {
+/* Une case par clic, et pas de peinture au glisse.
+   A trente joueurs, un glisse envoie des dizaines de transactions d'un seul
+   geste : le RPC sature et le plateau devient illisible. On peut enchainer
+   les clics aussi vite qu'on veut, mais chaque case demande un geste. */
+function poser(ev) {
   const i = cellAt(ev);
-  if (i < 0 || i === lastCell) return;
-  lastCell = i;
+  if (i < 0) return;
   if (board[i] === myColor) return;     // le contrat refuserait de toute facon
   const celluleVierge = board[i] === 0; // a relever AVANT la peinture optimiste
   board[i] = myColor;                   // peinture optimiste : reponse instantanee
   owners[i] = wallet ? wallet.address : null;
   flash[i] = performance.now();
   dirty = true;
-  notifyPaint(i, myColor, true);        // son immediat, aucun aller-retour chaine
+  notifyPaint(i, myColor, true);
   enqueue(i, celluleVierge);
 }
 
 if (!SPECTATE) {
-  cv.addEventListener("pointerdown", e => { painting = true; lastCell = -1; tryPaint(e); });
-  cv.addEventListener("pointermove", e => { if (painting) tryPaint(e); });
-  addEventListener("pointerup", () => { painting = false; lastCell = -1; });
+  cv.addEventListener("pointerdown", e => { e.preventDefault(); poser(e); });
   cv.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+  cv.addEventListener("contextmenu", e => e.preventDefault());
 }
 
 function copyFeedback(btn, label) {
