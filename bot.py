@@ -268,7 +268,7 @@ def cmd_fund(args):
 # refill
 # ----------------------------------------------------------------------
 
-def scan_players(w3, contract, since=None, chunk=GETLOGS_MAX_RANGE):
+def scan_players(w3, contract, since=None, chunk=GETLOGS_MAX_RANGE, epoch=None):
     """
     Adresses ayant pose au moins une case, extraites des logs Claimed.
     C'est ce qui permet de recharger la salle sans demander son adresse a
@@ -281,8 +281,13 @@ def scan_players(w3, contract, since=None, chunk=GETLOGS_MAX_RANGE):
           f"({(head - start) // chunk + 1} requetes)")
     while block <= head:
         to = min(head, block + chunk - 1)
+        # epoch est le premier topic indexe de Claimed : le filtrer cote RPC
+        # evite de ramener les poses des manches precedentes.
+        topics = [CLAIMED_TOPIC]
+        if epoch is not None:
+            topics.append("0x" + format(epoch, "064x"))
         try:
-            logs = w3.eth.get_logs({"address": contract, "topics": [CLAIMED_TOPIC],
+            logs = w3.eth.get_logs({"address": contract, "topics": topics,
                                     "fromBlock": block, "toBlock": to})
         except Exception as exc:
             print("  RPC: " + str(exc)[:90])
@@ -397,6 +402,40 @@ def leaderboard(w3, contract, avec_poses=True):
 def cmd_rank(args):
     w3 = connect(args.rpc)
     c = contract_of(w3, args.contract)
+
+    if args.par == "poses":
+        # Mode chacun pour soi : on classe au nombre de poses de la manche en
+        # cours, relu sur la totalite des logs. C'est le classement qui fait foi,
+        # l'affichage du front ne compte que depuis l'ouverture de sa page.
+        manche = c.functions.epoch().call()
+        depuis = args.since
+        if depuis is None and os.path.exists("deployment.json"):
+            try:
+                depuis = json.load(open("deployment.json")).get("block")
+            except Exception:
+                pass
+        poses = scan_players(w3, Web3.to_checksum_address(args.contract),
+                             depuis, epoch=manche)
+        if not poses:
+            print("aucune pose sur la manche en cours")
+            return
+        adresses = sorted(poses, key=lambda a: -poses[a])
+        pseudos = {}
+        try:
+            for a, brut in zip(adresses, c.functions.namesOf(adresses).call()):
+                nom = brut.rstrip(b"\x00").decode("utf-8", "replace")
+                if nom:
+                    pseudos[a] = nom
+        except Exception:
+            pass
+        total = sum(poses.values())
+        print(f"manche {manche} : {len(adresses)} joueurs, {total} poses")
+        print(f"{'#':>3}  {'joueur':<20} {'adresse':<44} {'poses':>6}  {'part':>6}")
+        for i, a in enumerate(adresses[:args.top], start=1):
+            print(f"{i:>3}  {pseudos.get(a,''):<20} {a:<44} {poses[a]:>6}  "
+                  f"{poses[a]/total*100:5.1f} %")
+        return
+
     classement = leaderboard(w3, c)
     if not classement:
         print("plateau vide, personne ne tient de territoire")
@@ -721,6 +760,9 @@ def main():
     k = sub.add_parser("rank", help="classement par territoire tenu")
     k.add_argument("--contract", required=True)
     k.add_argument("--top", type=int, default=15)
+    k.add_argument("--par", choices=("territoire", "poses"), default="territoire",
+                   help="territoire = mode coop, poses = mode chacun pour soi")
+    k.add_argument("--since", type=int, help="bloc de depart (defaut: deployment.json)")
     k.set_defaults(func=cmd_rank)
 
     o = sub.add_parser("payout", help="distribue la cagnotte et cloture la manche")
