@@ -462,7 +462,8 @@
   <section class="stage">
     <div class="brand">
       <img src="wordmark.png" alt="Splash War" />
-      <span class="sub">1 case = 1 transaction<br>monad testnet</span>
+      <span class="sub">1 case = 1 transaction<br>partie <b id="empreinte"
+        style="color:var(--lilas)">&mdash;</b></span>
     </div>
 
 
@@ -497,7 +498,7 @@
       <div class="palette" id="palette">
         <div class="swatches" id="swatches"></div>
         <div class="palrow">
-          <span>Clique une case pour la peindre</span>
+          <span>Clique ou glisse pour peindre</span>
           <b id="curName">&mdash;</b>
         </div>
       </div>
@@ -1003,7 +1004,32 @@ function renderPalette() {
 }
 
 /* ------------------------- chaine ----------------------------- */
+/* L'adresse du contrat est relue dans un fichier non cache plutot que figee
+   dans la page. Un onglet ouvert avant un redeploiement se recale donc tout
+   seul : sans cela deux joueurs peuvent peindre sur deux toiles differentes
+   en voyant chacun un plateau parfaitement coherent. */
+async function adresseCourante() {
+  try {
+    const r = await fetch("contract.json", { cache: "no-store" });
+    const d = await r.json();
+    if (d && ethers.isAddress(d.address)) return ethers.getAddress(d.address);
+  } catch {}
+  return null;
+}
+
+async function surveillerContrat() {
+  const a = await adresseCourante();
+  if (!a || a.toLowerCase() === CFG.CONTRACT.toLowerCase()) return;
+  status("Nouvelle partie detectee, rechargement\u2026");
+  setTimeout(() => location.reload(), 900);
+}
+
 async function initChain() {
+  // Le parametre d'url reste prioritaire : il sert a pointer une chaine locale.
+  if (!qs.get("contract")) {
+    const a = await adresseCourante();
+    if (a) CFG.CONTRACT = a;
+  }
   iface = new ethers.Interface(ABI);
   claimedTopic = iface.getEvent("Claimed").topicHash;
   provider = new ethers.JsonRpcProvider(CFG.RPC, CFG.CHAIN_ID, { staticNetwork: true });
@@ -1015,6 +1041,7 @@ async function initChain() {
   $("wAddr").innerHTML = `<a href="${CFG.EXPLORER}/address/${wallet.address}" target="_blank"
       rel="noopener" style="color:var(--cyan);text-decoration:none">${short(wallet.address)}</a>`;
   $("wAddr").title = wallet.address;
+  $("empreinte").textContent = CFG.CONTRACT.slice(-4).toUpperCase();
   $("cAddr").textContent = short(CFG.CONTRACT);
   $("cAddr").title = CFG.CONTRACT;
   $("cRpc").textContent = CFG.RPC.replace(/^https?:\/\//, "");
@@ -1047,6 +1074,7 @@ async function initChain() {
   setInterval(refreshFee, 30000);
   setInterval(refreshOwners, SPECTATE ? 10000 : 60000);
   setInterval(rafraichirPseudos, 12000);
+  setInterval(surveillerContrat, 25000);
   pollLoop();
 }
 
@@ -1281,8 +1309,15 @@ async function sendClaim({ cell, celluleVierge }) {
     try { nextNonce = await provider.getTransactionCount(wallet.address, "pending"); } catch {}
     try { await refreshBalance(); } catch {}
     queuePaused = false;
+    // Une pose ratee est repeinte optimistiquement puis effacee a la
+    // resynchronisation : sans message, la case semble disparaitre toute
+    // seule et le joueur n'y comprend rien.
     if (String(e.message || "").match(/funds|balance/i)) {
-      status("Wallet a sec. Fais passer ton adresse pour une recharge.", "err");
+      status("Plus de credit, on te recharge\u2026", "err");
+      demanderFinancement(true);
+    } else {
+      status("Une case n'est pas passee, reessaie.", "err");
+      setTimeout(() => { if ($("netStatus").innerText.includes("pas passee")) status(""); }, 3500);
     }
   }
   paintUI();
@@ -1380,13 +1415,13 @@ function cellAt(ev) {
   return y * W + x;
 }
 
-/* Une case par clic, et pas de peinture au glisse.
-   A trente joueurs, un glisse envoie des dizaines de transactions d'un seul
-   geste : le RPC sature et le plateau devient illisible. On peut enchainer
-   les clics aussi vite qu'on veut, mais chaque case demande un geste. */
+/* Glisse actif : on peint en continu en gardant le doigt appuye. Chaque case
+   franchie part en transaction, mais une seule fois : lastCell evite de
+   renvoyer la meme case tant que le doigt ne l'a pas quittee. */
 function poser(ev) {
   const i = cellAt(ev);
-  if (i < 0) return;
+  if (i < 0 || i === lastCell) return;
+  lastCell = i;
   if (board[i] === myColor) return;     // le contrat refuserait de toute facon
   const celluleVierge = board[i] === 0; // a relever AVANT la peinture optimiste
   board[i] = myColor;                   // peinture optimiste : reponse instantanee
@@ -1397,8 +1432,15 @@ function poser(ev) {
   enqueue(i, celluleVierge);
 }
 
+let painting = false, lastCell = -1;
+
 if (!SPECTATE) {
-  cv.addEventListener("pointerdown", e => { e.preventDefault(); poser(e); });
+  cv.addEventListener("pointerdown", e => {
+    e.preventDefault(); painting = true; lastCell = -1; poser(e);
+  });
+  cv.addEventListener("pointermove", e => { if (painting) poser(e); });
+  addEventListener("pointerup", () => { painting = false; lastCell = -1; });
+  addEventListener("pointercancel", () => { painting = false; lastCell = -1; });
   cv.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
   cv.addEventListener("contextmenu", e => e.preventDefault());
 }

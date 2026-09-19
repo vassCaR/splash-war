@@ -233,6 +233,13 @@ def main():
                    "deployer": acct.address, "block": rcpt.blockNumber, "abi": abi},
                   f, indent=2)
 
+    # L'adresse vit dans un fichier a part, relu sans cache par le front : un
+    # onglet deja ouvert avant un redeploiement se recale tout seul au lieu de
+    # rester indefiniment sur l'ancien contrat, donc sur une autre toile.
+    with open(os.path.join(ROOT, "web", "contract.json"), "w") as f:
+        json.dump({"address": address, "chainId": CHAIN_ID, "block": rcpt.blockNumber}, f)
+    print("adresse ecrite dans web/contract.json")
+
     if not args.no_write_front:
         write_front(address)
 
