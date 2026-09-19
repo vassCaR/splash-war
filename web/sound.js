@@ -598,7 +598,17 @@ const TWSound = (() => {
   return {
     debloquer,
     musique,
-    get musiqueActive() { return musiqueActive; },                               // a cabler sur un bouton "activer le son"
+    get musiqueActive() { return musiqueActive; },
+    /* Quelle source joue : le fichier depose, ou la boucle synthetisee.
+       Sert au diagnostic, l'element audio n'etant pas dans le DOM. */
+    get source() {
+      if (pisteDisponible && piste) {
+        return { type: "fichier", enLecture: !piste.paused,
+                 position: piste.currentTime, duree: piste.duration, boucle: piste.loop };
+      }
+      return { type: pisteDisponible === false ? "synthese" : "en cours de chargement",
+               enLecture: musiqueActive && horloge !== null };
+    },                               // a cabler sur un bouton "activer le son"
     demarrage,
     recompense,
     blip,
