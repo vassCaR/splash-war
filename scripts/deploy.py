@@ -36,6 +36,26 @@ SOURCE = os.path.join(ROOT, "contracts", "TerritoryWar.sol")
 FRONT = os.path.join(ROOT, "web", "index.html")
 OUT = os.path.join(ROOT, "deployment.json")
 
+def load_env():
+    """
+    Charge .env a la racine du projet, sans dependance externe.
+    La cle privee reste dans ce fichier, jamais dans une ligne de commande
+    ni dans l'historique du shell. .env est deja dans .gitignore.
+    """
+    path = os.path.join(ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("\"'"))
+
+
+load_env()
+
 RPC_DEFAULT = os.environ.get("MONAD_RPC", "https://testnet-rpc.monad.xyz")
 CHAIN_ID = 10143
 EXPLORER = "https://testnet.monadscan.com"

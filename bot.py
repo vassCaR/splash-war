@@ -31,6 +31,27 @@ try:
 except ImportError:
     sys.exit("web3 manquant : pip install -r requirements.txt")
 
+
+def load_env(path=None):
+    """
+    Charge .env a la racine du projet, sans dependance externe.
+    La cle privee reste dans ce fichier, jamais dans une ligne de commande
+    ni dans l'historique du shell. .env est deja dans .gitignore.
+    """
+    path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("\"'"))
+
+
+load_env()
+
 RPC_DEFAULT = os.environ.get("MONAD_RPC", "https://testnet-rpc.monad.xyz")
 CHAIN_ID = 10143
 WALLETS_FILE = os.environ.get("TW_WALLETS", "wallets.json")
@@ -126,10 +147,25 @@ def cmd_gen(args):
 
 def cmd_fund(args):
     w3 = connect(args.rpc)
-    key = args.key or os.environ.get("TW_FUNDER_KEY")
-    if not key:
-        sys.exit("cle du compte source manquante : --key 0x... ou export TW_FUNDER_KEY=0x...")
-    funder = Account.from_key(key)
+
+    # Le faucet Monad plafonne par adresse : une reserve de plusieurs dizaines de
+    # MON est forcement eclatee sur plusieurs comptes. On accepte donc une liste
+    # de cles sources et on repartit les virements dessus, le plus garni d'abord.
+    raw = args.key or os.environ.get("TW_FUNDER_KEY") or os.environ.get("TW_DEPLOYER_KEY")
+    if not raw:
+        sys.exit("cle source manquante : --key 0x...[,0x...] ou TW_FUNDER_KEY dans .env")
+    keys = [k.strip() for k in raw.split(",") if k.strip()]
+    funders = [Account.from_key(k) for k in keys]
+
+    balances = {}
+    for f in funders:
+        balances[f.address] = w3.eth.get_balance(f.address)
+    funders.sort(key=lambda f: balances[f.address], reverse=True)
+    reserve = sum(balances.values())
+    for f in funders:
+        print(f"source  {f.address}  {fmt_mon(balances[f.address])}")
+    if len(funders) > 1:
+        print(f"reserve totale {fmt_mon(reserve)}")
 
     targets = []
     if not args.extra_only:
@@ -139,42 +175,50 @@ def cmd_fund(args):
         sys.exit("aucune adresse a financer")
 
     amount = Web3.to_wei(args.amount, "ether")
-    balance = w3.eth.get_balance(funder.address)
-    needed = amount * len(targets)
-    print(f"source  {funder.address}  {fmt_mon(balance)}")
-    print(f"cibles  {len(targets)} x {args.amount} MON = {fmt_mon(needed)}")
-    if balance < needed:
-        sys.exit("solde insuffisant sur le compte source")
-
     if args.skip_funded:
-        kept = []
-        for addr in targets:
-            if w3.eth.get_balance(addr) >= amount // 2:
-                continue
-            kept.append(addr)
-        print(f"{len(targets) - len(kept)} deja approvisionnes, ignores")
+        kept = [a for a in targets if w3.eth.get_balance(a) < amount // 2]
+        if len(kept) != len(targets):
+            print(f"{len(targets) - len(kept)} deja approvisionnes, ignores")
         targets = kept
         if not targets:
             return
 
     max_fee, tip = fees(w3)
-    nonce = w3.eth.get_transaction_count(funder.address, "pending")
+    frais = 21_000 * max_fee          # Monad facture le gas_limit, ici 21000 pile
+    needed = (amount + frais) * len(targets)
+    print(f"cibles  {len(targets)} x {args.amount} MON = {fmt_mon(needed)} frais compris")
+    if reserve < needed:
+        sys.exit(f"reserve insuffisante : il manque {fmt_mon(needed - reserve)}")
+
+    # Repartition : on remplit source par source, dans l'ordre de richesse.
+    plan, i = [], 0
+    for f in funders:
+        capacite = int(balances[f.address] // (amount + frais))
+        part = targets[i:i + capacite]
+        if part:
+            plan.append((f, part))
+            i += len(part)
+        if i >= len(targets):
+            break
+
+    nonces = {f.address: w3.eth.get_transaction_count(f.address, "pending")
+              for f, _ in plan}
     hashes = []
-    for addr in targets:
-        tx = {
-            "to": addr, "value": amount, "gas": 21_000,
-            "maxFeePerGas": max_fee, "maxPriorityFeePerGas": tip,
-            "nonce": nonce, "chainId": CHAIN_ID, "type": 2,
-        }
-        signed = funder.sign_transaction(tx)
-        try:
-            h = w3.eth.send_raw_transaction(raw_of(signed))
-            hashes.append(h)
-            nonce += 1
-            print(f"  -> {addr}  {h.hex()}")
-        except Exception as exc:
-            print(f"  !! {addr}  {exc}")
-        time.sleep(args.delay)
+    for funder, part in plan:
+        for addr in part:
+            tx = {
+                "to": addr, "value": amount, "gas": 21_000,
+                "maxFeePerGas": max_fee, "maxPriorityFeePerGas": tip,
+                "nonce": nonces[funder.address], "chainId": CHAIN_ID, "type": 2,
+            }
+            try:
+                h = w3.eth.send_raw_transaction(raw_of(funder.sign_transaction(tx)))
+                hashes.append(h)
+                nonces[funder.address] += 1
+                print(f"  -> {addr}  {h.hex()}")
+            except Exception as exc:
+                print(f"  !! {addr}  {str(exc)[:100]}")
+            time.sleep(args.delay)
 
     if not hashes:
         return
@@ -182,13 +226,13 @@ def cmd_fund(args):
     try:
         w3.eth.wait_for_transaction_receipt(hashes[-1], timeout=90)
     except Exception as exc:
-        print("recu non confirme : " + str(exc))
+        print("recu non confirme : " + str(exc)[:100])
 
     # Execution asynchrone : le solde n'est pas depensable avant ~3 blocs.
     pause = BLOCKS_BEFORE_SPEND * 0.5 + 1.0
     print(f"pause de {pause:.1f}s (execution asynchrone Monad) avant de pouvoir depenser")
     time.sleep(pause)
-    print("wallets prets")
+    print(f"{len(hashes)} wallets prets")
 
 
 # ----------------------------------------------------------------------
@@ -404,7 +448,7 @@ def main():
     g.set_defaults(func=cmd_gen)
 
     f = sub.add_parser("fund", help="approvisionne les wallets")
-    f.add_argument("--key", help="cle privee du compte source (ou TW_FUNDER_KEY)")
+    f.add_argument("--key", help="cle(s) privee(s) source, separees par des virgules (ou TW_FUNDER_KEY dans .env)")
     f.add_argument("--amount", type=float, default=0.2,
                help="MON par wallet (0.2 = environ 22 captures)")
     f.add_argument("--extra", nargs="*", help="adresses supplementaires a arroser")
