@@ -360,7 +360,7 @@
   .solo .palette{display:none}
   .solo .stage{grid-template-columns:250px 1fr}
   .solo .side{display:flex}
-  .solo .side .block:nth-child(n+4){display:none}
+  .solo .side .block:nth-child(n+3){display:none}
   .solo .palette{display:none}
   .solo .side h2{font-size:11px}
   .solo .side .row{font-size:14px;grid-template-columns:16px 1fr 58px}
@@ -504,7 +504,7 @@
     </div>
 
     <div class="block" id="blocVersus">
-      <h2>Chacun pour soi</h2>
+      <h2>Cases posees <span id="nbJoueurs" style="color:var(--dim)"></span></h2>
       <div class="scores" id="spammeurs"></div>
       <p class="foot" style="margin-top:9px">Cases posees depuis l'ouverture de
       cette page. Le classement officiel se calcule sur la totalite des logs.</p>
@@ -586,7 +586,12 @@ const DEFAULTS = {
   RPC:      "https://testnet-rpc.monad.xyz",     // alt: https://rpc.ankr.com/monad_testnet
   CHAIN_ID: 10143,
   EXPLORER: "https://testnet.monadscan.com",
-  POLL_MS:  800,        // frequence de lecture des logs
+  /* Le videoprojecteur doit etre vif, un telephone non : la pose du joueur
+     s'affiche instantanement de toute facon, seule l'arrivee des poses des
+     autres est differee. Ralentir les telephones divise par deux la charge
+     que trente d'entre eux imposent au RPC. */
+  POLL_MS:  1900,       // frequence de lecture des logs sur un telephone
+  POLL_MS_SPECTATE: 900,
   RESYNC_EVERY: 25,     // relecture complete du plateau tous les N polls
   MAX_LOG_RANGE: 90,    // eth_getLogs est plafonne a 100 blocs sur le RPC public
   MAX_INFLIGHT: 3,      // requetes d'envoi simultanees, pour ne pas noyer le RPC
@@ -870,7 +875,11 @@ function paintUI() {
 /** Qui a pose le plus de cases depuis l'ouverture de cette page. */
 function paintVersus() {
   const me = wallet ? wallet.address.toLowerCase() : "";
-  const rows = [...posesParJoueur.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const rows = [...posesParJoueur.entries()].sort((a, b) => b[1] - a[1])
+                 .slice(0, SPECTATE ? 12 : 8);
+  const total = [...posesParJoueur.values()].reduce((s, n) => s + n, 0);
+  $("nbJoueurs").textContent = posesParJoueur.size
+    ? `${posesParJoueur.size} joueurs \u00b7 ${total} cases` : "";
   $("spammeurs").innerHTML = rows.length ? rows.map(([a, n], i) => {
     const isMe = a === me;
     const nom = pseudos.get(a);
@@ -1007,9 +1016,10 @@ async function initChain() {
   // Visiteur deja venu, ou wallet vide apres une manche : on recharge sans
   // rien lui demander.
   setTimeout(() => { if (balanceKnown && balanceWei === 0n) demanderFinancement(); }, 1200);
-  setInterval(refreshBalance, 8000);
-  setInterval(refreshFee, 15000);
-  setInterval(refreshOwners, 10000);
+  setInterval(refreshBalance, 12000);
+  setInterval(refreshFee, 30000);
+  setInterval(refreshOwners, SPECTATE ? 10000 : 60000);
+  setInterval(rafraichirPseudos, 12000);
   pollLoop();
 }
 
@@ -1039,8 +1049,13 @@ async function refreshBalance() {
 
 /** Proprietaires des 1024 cases : 32 Ko de reponse, donc lu toutes les 10 s
     seulement, et jamais dans la boucle de polling. */
+/* getOwners renvoie 2304 adresses, soit environ 73 Ko. Multiplie par trente
+   telephones toutes les dix secondes, c'est a lui seul de quoi saturer un RPC
+   public. Le classement par territoire ne sert qu'au videoprojecteur : on ne
+   le demande donc que la. Sur un telephone, le classement des poses se deduit
+   des evenements deja lus, sans une requete de plus. */
 async function refreshOwners() {
-  if (!ethers.isAddress(CFG.CONTRACT)) return;
+  if (!SPECTATE || !ethers.isAddress(CFG.CONTRACT)) return;
   try {
     const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
     owners = (await c.getOwners()).map(a => a);
@@ -1049,8 +1064,18 @@ async function refreshOwners() {
     // saturerait le RPC public le jour de la demo.
     const compte = new Map();
     for (const a of owners) if (a && a !== ZERO) compte.set(a, (compte.get(a) || 0) + 1);
-    const tete = [...compte.entries()].sort((x, y) => y[1] - x[1]).slice(0, 12).map(e => e[0]);
-    if (wallet && !tete.includes(wallet.address)) tete.push(wallet.address);
+    const tete = [...compte.entries()].sort((x, y) => y[1] - x[1]).slice(0, 10).map(e => e[0]);
+
+    // Les plus gros poseurs ne sont pas forcement ceux qui tiennent le plus de
+    // terrain : quelqu'un qui pose beaucoup et se fait recouvrir doit quand
+    // meme apparaitre avec son pseudo au classement.
+    const poseurs = [...posesParJoueur.entries()]
+      .sort((x, y) => y[1] - x[1]).slice(0, 12).map(e => e[0]);
+    const vus = new Set(tete.map(a => a.toLowerCase()));
+    for (const a of poseurs) {
+      if (!vus.has(a)) { tete.push(ethers.getAddress(a)); vus.add(a); }
+    }
+    if (wallet && !vus.has(wallet.address.toLowerCase())) tete.push(wallet.address);
     if (tete.length) {
       const bruts = await c.namesOf(tete);
       tete.forEach((a, i) => {
@@ -1059,6 +1084,25 @@ async function refreshOwners() {
       });
     }
     paintHolders();
+  } catch {}
+}
+
+/** Pseudos des meilleurs poseurs, en une seule requete. Bien plus leger que
+    getOwners : douze adresses au lieu de deux mille trois cents. */
+async function rafraichirPseudos() {
+  if (!ethers.isAddress(CFG.CONTRACT) || !posesParJoueur.size) return;
+  const manquants = [...posesParJoueur.entries()]
+    .sort((a, b) => b[1] - a[1]).slice(0, 12)
+    .map(e => e[0]).filter(a => !pseudos.has(a));
+  if (!manquants.length) return;
+  try {
+    const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
+    const bruts = await c.namesOf(manquants.map(a => ethers.getAddress(a)));
+    manquants.forEach((a, i) => {
+      const nom = depuisBytes32(bruts[i]);
+      if (nom) pseudos.set(a, nom);
+    });
+    paintVersus();
   } catch {}
 }
 
@@ -1079,11 +1123,15 @@ async function pollLoop() {
       // rate limit ou blip reseau : on reessaie, mais au bout de 5 echecs
       // d'affilee on le dit, sinon on cherche le probleme du mauvais cote.
       if (++rpcFails === 5) {
-        status("RPC en difficulte (" + (e.shortMessage || e.message || "").slice(0, 60) +
-               "). Bascule sur un autre RPC dans Reglages.", "err");
+        status("RPC sature. Change de RPC dans Reglages si ca dure.", "err");
       }
+      // Temporisation croissante : insister quand le RPC dit non aggrave la
+      // saturation pour tout le monde.
+      await sleep(Math.min(8000, 600 * rpcFails));
     }
-    await sleep(CFG.POLL_MS);
+    // Un grain d'aleatoire : sans lui, trente navigateurs ouverts en meme
+    // temps interrogent le RPC exactement au meme instant, en rafales.
+    await sleep((SPECTATE ? CFG.POLL_MS_SPECTATE : CFG.POLL_MS) + Math.random() * 500);
   }
 }
 
@@ -1395,19 +1443,43 @@ async function demanderFinancement(force) {
     if (!r.ok) return false;
     const d = await r.json();
     if (!d.ok) return false;
-    if (d.deja) { await refreshBalance(); return true; }
+    if (d.deja) { await refreshBalance(); ecrireNomSiBesoin(); return true; }
     // L'execution Monad a trois blocs de retard sur le consensus : le solde
     // n'est pas depensable immediatement apres le recu.
     status("Preparation de ton wallet\u2026");
     for (let i = 0; i < 12; i++) {
       await sleep(900);
       await refreshBalance();
-      if (balanceWei > 0n) { status(""); paintUI(); return true; }
+      if (balanceWei > 0n) { status(""); paintUI(); ecrireNomSiBesoin(); return true; }
     }
     status("");
     return false;
   } catch {
     return false;
+  }
+}
+
+/* Le pseudo saisi a l'accueil reste local tant que le wallet est vide. Des
+   qu'il est approvisionne, on l'inscrit onchain : sans ca le classement au
+   videoprojecteur n'affiche que de l'hexadecimal, ce qui ne dit rien a
+   personne. Une seule transaction, une seule fois. */
+let nomEcrit = false;
+
+async function ecrireNomSiBesoin() {
+  if (nomEcrit || !wallet || balanceWei === 0n) return;
+  const local = store.get("tw.pseudo", "").trim();
+  if (!local) return;
+  try {
+    const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
+    const dejaLa = depuisBytes32((await c.namesOf([wallet.address]))[0]);
+    if (dejaLa) { nomEcrit = true; return; }
+  } catch { return; }
+  nomEcrit = true;
+  if (await envoyerAction("setName", [versBytes32(local)], 90000n, "Le pseudo", null)) {
+    pseudos.set(wallet.address.toLowerCase(), local.slice(0, 31));
+    paintVersus();
+  } else {
+    nomEcrit = false;                // on retentera au prochain passage
   }
 }
 
