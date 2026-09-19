@@ -503,24 +503,10 @@
       </div>
     </div>
 
-    <div class="block" id="blocCoop">
-      <h2>Mode coop <span id="mRessemblance" class="arcade"
-          style="color:var(--turquoise);font-size:13px">0<small>%</small></span></h2>
-      <div class="stack"><i id="jaugeCoop" style="background:var(--turquoise);width:0"></i></div>
-      <div class="foot" id="detailCoop" style="margin-bottom:10px">&mdash;</div>
-      <div id="listeGabarits" class="gabs"></div>
-      <label class="act mini" style="margin-top:8px;cursor:pointer;display:block;text-align:center">
-        CHARGER UNE IMAGE
-        <input type="file" id="inImage" accept="image/*" hidden />
-      </label>
-      <p class="foot" style="margin-top:8px">Le modele s'affiche en filigrane sur
-      le plateau. Reproduisez-le ensemble.</p>
-    </div>
-
-    <div class="block" id="blocVersus" hidden>
+    <div class="block" id="blocVersus">
       <h2>Chacun pour soi</h2>
       <div class="scores" id="spammeurs"></div>
-      <p class="foot" style="margin-top:9px">Poses comptees depuis l'ouverture de
+      <p class="foot" style="margin-top:9px">Cases posees depuis l'ouverture de
       cette page. Le classement officiel se calcule sur la totalite des logs.</p>
     </div>
 
@@ -586,10 +572,6 @@
       <input class="cfg" id="inRpc" placeholder="RPC url" style="margin-top:7px" />
       <button class="act" id="btnSave" style="margin-top:7px">Appliquer et recharger</button>
       <button class="act" id="btnMusique" style="margin-top:7px">Musique : arret</button>
-      <div class="ligne" style="margin-top:7px">
-        <button class="act" id="btnModeCoop">Coop</button>
-        <button class="act" id="btnModeVersus">Chacun pour soi</button>
-      </div>
       <p class="foot" style="margin-top:9px">Mode projecteur : ajouter ?spectate=1 a l'url.</p>
     </div>
   </aside>
@@ -700,8 +682,9 @@ let pseudos = new Map();
    ressemblance ; "versus" retire le gabarit et classe au nombre de poses.
    Le mode est purement cote front : le contrat ne sait pas ce qu'on joue, et
    c'est voulu, ca evite une ecriture de plus. */
-let mode = store.get("tw.mode", "coop");
-let gabarits = [], gabarit = null, gabaritNom = "";
+/* Le mode de jeu n'est plus un reglage du joueur : les manches sont
+   annoncees a la voix et l'image a reproduire est projetee a l'ecran, pas
+   affichee en filigrane sur le plateau de chacun. */
 
 /* Poses par joueur pour le mode versus, comptees sur le flux d'evenements
    depuis l'ouverture de la page. C'est un indicateur en direct, pas le
@@ -760,100 +743,6 @@ function gasWorst() { return gasFor(true); }
 
 /** Cout reel attendu d'une pose : c'est le prix effectif qui est debite, pas maxFeePerGas. */
 function costOf(gas) { return fee ? gas * fee.effective : 0n; }
-
-/* ---------------- gabarits du mode cooperatif ----------------
-   Un gabarit est un tableau de 2304 indices de palette, 0 = case libre.
-   Le front n'impose rien : il affiche le modele en filigrane et compte la
-   ressemblance. Rien de tout cela ne touche a la chaine. */
-async function chargerGabarits() {
-  try {
-    const r = await fetch("stencils.json", { cache: "no-store" });
-    const d = await r.json();
-    gabarits = d.gabarits || [];
-    const voulu = store.get("tw.gabarit", "");
-    choisirGabarit(gabarits.findIndex(g => g.nom === voulu) >= 0
-      ? gabarits.findIndex(g => g.nom === voulu) : 0);
-    renderGabarits();
-  } catch (e) {
-    $("listeGabarits").innerHTML = '<p class="foot">Aucun gabarit charge.</p>';
-  }
-}
-
-function choisirGabarit(i) {
-  if (i < 0 || !gabarits[i]) { gabarit = null; gabaritNom = ""; dirty = true; return; }
-  gabarit = Uint8Array.from(gabarits[i].cells);
-  gabaritNom = gabarits[i].nom;
-  store.set("tw.gabarit", gabaritNom);
-  dirty = true;
-  renderGabarits();
-  paintUI();
-}
-
-function renderGabarits() {
-  if (!gabarits.length) return;
-  $("listeGabarits").innerHTML = gabarits.map((g, i) =>
-    `<button class="act mini gab ${g.nom === gabaritNom ? "on" : ""}"
-             data-i="${i}">${g.nom}</button>`).join("");
-  $("listeGabarits").querySelectorAll(".gab").forEach(b =>
-    b.onclick = () => choisirGabarit(Number(b.dataset.i)));
-}
-
-/** Ressemblance : part des cases du modele effectivement peintes de la bonne couleur. */
-function ressemblance() {
-  if (!gabarit) return null;
-  let cible = 0, juste = 0;
-  for (let i = 0; i < CELLS; i++) {
-    if (!gabarit[i]) continue;
-    cible++;
-    if (board[i] === gabarit[i]) juste++;
-  }
-  return cible ? { juste, cible, pct: juste / cible * 100 } : null;
-}
-
-/* Conversion d'une image en gabarit, directement dans le navigateur : tu peux
-   deposer n'importe quelle image pendant la demo sans relancer de script.
-   Le rapprochement se fait en Lab, pas en RVB : la distance y correspond a ce
-   que l'oeil percoit. */
-function versLab(r, g, b) {
-  [r, g, b] = [r, g, b].map(v => { v /= 255;
-    return v > .04045 ? Math.pow((v + .055) / 1.055, 2.4) : v / 12.92; });
-  const x = (r*.4124 + g*.3576 + b*.1805) / .95047;
-  const y = (r*.2126 + g*.7152 + b*.0722);
-  const z = (r*.0193 + g*.1192 + b*.9505) / 1.08883;
-  const f = t => t > .008856 ? Math.cbrt(t) : 7.787 * t + 16/116;
-  const fx = f(x), fy = f(y), fz = f(z);
-  return [116*fy - 16, 500*(fx - fy), 200*(fy - fz)];
-}
-const LAB_PALETTE = PALETTE.map(c => {
-  const n = parseInt(c.hex.slice(1), 16);
-  return { id: c.id, lab: versLab((n >> 16) & 255, (n >> 8) & 255, n & 255) };
-});
-function plusProche(r, g, b) {
-  const cible = versLab(r, g, b);
-  let best = 1, d = Infinity;
-  for (const p of LAB_PALETTE) {
-    const e = (p.lab[0]-cible[0])**2 + (p.lab[1]-cible[1])**2 + (p.lab[2]-cible[2])**2;
-    if (e < d) { d = e; best = p.id; }
-  }
-  return best;
-}
-
-function imageVersGabarit(img, nom) {
-  const c = document.createElement("canvas");
-  c.width = W; c.height = H;
-  const g = c.getContext("2d", { willReadFrequently: true });
-  const cote = Math.min(img.width, img.height);
-  g.drawImage(img, (img.width - cote) / 2, (img.height - cote) / 2, cote, cote, 0, 0, W, H);
-  const d = g.getImageData(0, 0, W, H).data;
-  const cells = [];
-  for (let i = 0; i < CELLS; i++) {
-    const o = i * 4;
-    cells.push(d[o + 3] < 110 ? 0 : plusProche(d[o], d[o + 1], d[o + 2]));
-  }
-  gabarits = gabarits.filter(x => x.nom !== nom);
-  gabarits.push({ nom, cells });
-  choisirGabarit(gabarits.length - 1);
-}
 
 /* ------------------------- evenement de pose ------------------------
    Chaque case peinte emet un evenement "tw:paint" sur window. C'est le point
@@ -926,20 +815,6 @@ function draw() {
       }
     }
 
-    // Gabarit en filigrane : on ne montre le modele que la ou il reste a
-    // peindre, sinon il salit les cases deja justes.
-    if (mode === "coop" && gabarit) {
-      for (let i = 0; i < CELLS; i++) {
-        const cible = gabarit[i];
-        if (!cible || board[i] === cible) continue;
-        const x = (i % W) * px, y = ((i / W) | 0) * px;
-        ctx.globalAlpha = board[i] ? 0.30 : 0.42;
-        ctx.fillStyle = COLOR_HEX[cible];
-        ctx.fillRect(x + px * 0.28, y + px * 0.28, px * 0.44, px * 0.44);
-        ctx.globalAlpha = 1;
-      }
-    }
-
     // Subdivisions tous les 8 : reperes de lecture sans quadriller chaque case.
     // Un liseré par case hachurait le plateau et cassait les aplats.
     ctx.fillStyle = "rgba(180,140,255,.26)";
@@ -981,15 +856,7 @@ function paintUI() {
 
   $("mFill").innerHTML = filled + "<small>/2304</small>";
 
-  const r = mode === "coop" ? ressemblance() : null;
-  $("blocCoop").hidden = mode !== "coop";
-  $("blocVersus").hidden = mode !== "versus";
-  if (r) {
-    $("mRessemblance").innerHTML = r.pct.toFixed(1) + "<small>%</small>";
-    $("jaugeCoop").style.width = r.pct + "%";
-    $("detailCoop").textContent = `${r.juste} / ${r.cible} cases du modele`;
-  }
-  if (mode === "versus") paintVersus();
+  paintVersus();
   $("mTotal").textContent = totalClaims;
   $("cEpoch").textContent = epoch || "—";
   $("wSent").textContent = sent;
@@ -1000,7 +867,7 @@ function paintUI() {
   paintFuel();
 }
 
-/** Classement du mode versus : qui a pose le plus de cases cette session. */
+/** Qui a pose le plus de cases depuis l'ouverture de cette page. */
 function paintVersus() {
   const me = wallet ? wallet.address.toLowerCase() : "";
   const rows = [...posesParJoueur.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -1492,28 +1359,6 @@ $("btnCopyKey").onclick = () => {
   navigator.clipboard.writeText(store.get("tw.pk", ""));
   copyFeedback($("btnCopyKey"), "COPIEE");
 };
-function appliquerMode(m) {
-  mode = m;
-  store.set("tw.mode", m);
-  $("btnModeCoop").style.borderColor = m === "coop" ? "var(--turquoise)" : "";
-  $("btnModeVersus").style.borderColor = m === "versus" ? "var(--turquoise)" : "";
-  dirty = true;
-  paintUI();
-}
-$("btnModeCoop").onclick = () => appliquerMode("coop");
-$("btnModeVersus").onclick = () => appliquerMode("versus");
-
-$("inImage").onchange = e => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
-  const img = new Image();
-  img.onload = () => {
-    imageVersGabarit(img, f.name.replace(/\.[^.]+$/, "").toUpperCase().slice(0, 12));
-    URL.revokeObjectURL(img.src);
-  };
-  img.src = URL.createObjectURL(f);
-};
-
 $("btnMusique").onclick = () => {
   try {
     TWSound.debloquer();
@@ -1642,8 +1487,6 @@ if (SPECTATE) {
 
 renderPalette();
 armerMusique();
-appliquerMode(mode);
-chargerGabarits();
 layout();
 addEventListener("resize", layout);
 draw();

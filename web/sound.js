@@ -538,17 +538,44 @@ const TWSound = (() => {
     }
   }
 
+  /* Si un fichier web/musique.mp3 est present, il remplace la boucle
+     synthetisee. Rien d'autre a changer : deposer le fichier suffit. Le
+     format importe peu, mp3 / ogg / m4a passent tous. */
+  let piste = null, pisteDisponible = null;
+
+  function chargerPiste() {
+    if (pisteDisponible !== null) return Promise.resolve(pisteDisponible);
+    return new Promise(resolve => {
+      const a = new Audio("musique.mp3");
+      a.loop = true;
+      a.preload = "auto";
+      a.volume = 0.35;
+      a.setAttribute("playsinline", "");
+      const ok = () => { piste = a; pisteDisponible = true; resolve(true); };
+      const ko = () => { pisteDisponible = false; resolve(false); };
+      a.addEventListener("canplaythrough", ok, { once: true });
+      a.addEventListener("error", ko, { once: true });
+      // Fichier absent ou reseau lent : on ne bloque pas le demarrage du son.
+      setTimeout(() => { if (pisteDisponible === null) ko(); }, 2500);
+    });
+  }
+
   function musique(marche) {
     if (!ctx || ctx.state !== "running") return false;
     if (marche === undefined) marche = !musiqueActive;
     if (marche === musiqueActive) return musiqueActive;
     musiqueActive = marche;
     if (marche) {
-      pas = 0;
-      prochainTemps = ctx.currentTime + 0.1;
-      horloge = setInterval(ordonnanceur, 25);
-      ordonnanceur();
+      chargerPiste().then(dispo => {
+        if (!musiqueActive) return;
+        if (dispo) { piste.currentTime = 0; piste.play().catch(() => {}); return; }
+        pas = 0;
+        prochainTemps = ctx.currentTime + 0.1;
+        horloge = setInterval(ordonnanceur, 25);
+        ordonnanceur();
+      });
     } else {
+      if (piste) piste.pause();
       clearInterval(horloge);
       horloge = null;
     }
@@ -557,7 +584,11 @@ const TWSound = (() => {
 
   // L'onglet en arriere-plan : on coupe, ca ne sert a personne et ca consomme.
   addEventListener("visibilitychange", () => {
-    if (document.hidden && musiqueActive) { clearInterval(horloge); horloge = null; }
+    if (document.hidden && musiqueActive) {
+      if (piste) piste.pause();
+      clearInterval(horloge); horloge = null;
+    }
+    else if (!document.hidden && musiqueActive && piste) { piste.play().catch(() => {}); }
     else if (!document.hidden && musiqueActive && ctx && ctx.state === "running") {
       prochainTemps = ctx.currentTime + 0.1;
       horloge = setInterval(ordonnanceur, 25);
