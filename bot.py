@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-bot.py - outillage Territory War : wallets jetables, financement, spam, monitoring.
+bot.py - outillage Splash War : wallets jetables, financement, spam, monitoring.
 
     python bot.py gen   --n 20
     python bot.py fund  --key <cle_privee_source> --amount 0.05
@@ -77,6 +77,10 @@ ABI = [
      "outputs": [{"type": "uint256"}]},
     {"name": "epoch", "type": "function", "stateMutability": "view", "inputs": [],
      "outputs": [{"type": "uint32"}]},
+    {"name": "namesOf", "type": "function", "stateMutability": "view",
+     "inputs": [{"name": "who", "type": "address[]"}], "outputs": [{"type": "bytes32[]"}]},
+    {"name": "destinationOf", "type": "function", "stateMutability": "view",
+     "inputs": [{"name": "player", "type": "address"}], "outputs": [{"type": "address"}]},
     {"name": "endRound", "type": "function", "stateMutability": "nonpayable",
      "inputs": [{"name": "winners", "type": "address[]"},
                 {"name": "shares", "type": "uint32[]"}], "outputs": []},
@@ -88,7 +92,7 @@ COLOR_NAMES = ["", "ACID", "LIME", "TEAL", "CYAN", "AZUR", "INDIGO", "VIOLET",
                "MAUVE", "MAGENTA", "ROSE", "ROUGE", "ORANGE", "AMBRE", "JAUNE",
                "SABLE", "BLANC"]
 COLORS = 16
-W = H = 32
+W = H = 48   # doit suivre WIDTH/HEIGHT du contrat
 
 
 # ----------------------------------------------------------------------
@@ -357,6 +361,8 @@ def leaderboard(w3, contract, avec_poses=True):
     Le score qui compte n'est pas le nombre de cases posees mais celles encore
     tenues a la fin : peindre tot ne sert a rien si on se fait recouvrir.
     Le nombre de poses reste affiche a cote, comme mesure d'effort.
+
+    Renvoie une liste de (adresse, tenu, poses, pseudo).
     """
     owners = contract.functions.getOwners().call()
     tenu = {}
@@ -364,15 +370,27 @@ def leaderboard(w3, contract, avec_poses=True):
         if addr and int(addr, 16) != 0:
             tenu[addr] = tenu.get(addr, 0) + 1
     classement = sorted(tenu.items(), key=lambda kv: -kv[1])
-    if not avec_poses:
-        return [(a, n, 0) for a, n in classement]
+    adresses = [a for a, _ in classement]
+
+    # Les pseudos en une seule lecture : un appel par joueur saturerait le RPC.
+    pseudos = {}
+    try:
+        for addr, brut in zip(adresses, contract.functions.namesOf(adresses).call()):
+            nom = brut.rstrip(b"\x00").decode("utf-8", "replace")
+            if nom:
+                pseudos[addr] = nom
+    except Exception:
+        pass
+
     sortie = []
     for addr, n in classement:
-        try:
-            poses = contract.functions.claimsOf(addr).call()
-        except Exception:
-            poses = 0
-        sortie.append((addr, n, poses))
+        poses = 0
+        if avec_poses:
+            try:
+                poses = contract.functions.claimsOf(addr).call()
+            except Exception:
+                poses = 0
+        sortie.append((addr, n, poses, pseudos.get(addr, "")))
     return sortie
 
 
@@ -388,12 +406,14 @@ def cmd_rank(args):
         print(f"manche {c.functions.epoch().call()}, cagnotte {fmt_mon(pot)}")
     except Exception:
         pass
-    total = sum(n for _, n, _ in classement)
-    print(f"{len(classement)} joueurs, {total} cases tenues sur 1024")
-    print(f"{'#':>3}  {'adresse':<44} {'tenu':>6} {'poses':>6}  {'garde':>6}")
-    for i, (addr, tenu, poses) in enumerate(classement[:args.top], start=1):
-        garde = f"{tenu / poses * 100:5.0f}%" if poses else "    -"
-        print(f"{i:>3}  {addr:<44} {tenu:>6} {poses:>6}  {garde:>6}")
+    total = sum(n for _, n, _, _ in classement)
+    nommes = sum(1 for _, _, _, p in classement if p)
+    print(f"{len(classement)} joueurs ({nommes} avec pseudo), "
+          f"{total} cases tenues sur 1024")
+    print(f"{'#':>3}  {'joueur':<20} {'adresse':<44} {'tenu':>6} {'poses':>6}  {'garde':>6}")
+    for i, (addr, tenu, poses, pseudo) in enumerate(classement[:args.top], start=1):
+        garde = f"{tenu / poses * 100:4.0f} %" if poses else "     -"
+        print(f"{i:>3}  {pseudo[:20]:<20} {addr:<44} {tenu:>6} {poses:>6}  {garde:>6}")
 
 
 def cmd_payout(args):
@@ -414,14 +434,21 @@ def cmd_payout(args):
         sys.exit("plateau vide, aucun gagnant a designer")
 
     parts = [int(x) for x in args.shares.split(",") if x.strip()]
-    gagnants = [a for a, _, _ in classement[:len(parts)]]
+    gagnants = [a for a, _, _, _ in classement[:len(parts)]]
     parts = parts[:len(gagnants)]
     total = sum(parts)
 
     print(f"cagnotte {fmt_mon(pot)}, {len(gagnants)} gagnants")
     for i, (addr, part) in enumerate(zip(gagnants, parts), start=1):
-        tenu = classement[i - 1][1]
-        print(f"  {i}. {addr}  {tenu:>4} cases  ->  {fmt_mon(pot * part // total)}")
+        _, tenu, _, pseudo = classement[i - 1]
+        try:
+            dest = c.functions.destinationOf(addr).call()
+        except Exception:
+            dest = addr
+        vers = "" if dest.lower() == addr.lower() else f"  -> {dest}"
+        etiquette = pseudo or addr
+        print(f"  {i}. {etiquette:<24} {tenu:>4} cases  "
+              f"{fmt_mon(pot * part // total):>12}{vers}")
 
     if args.dry_run:
         print("--dry-run : rien n'a ete envoye")
@@ -649,7 +676,7 @@ def cmd_watch(args):
 # ----------------------------------------------------------------------
 
 def main():
-    p = argparse.ArgumentParser(description="Outillage Territory War / Monad")
+    p = argparse.ArgumentParser(description="Outillage Splash War / Monad")
     p.add_argument("--rpc", default=RPC_DEFAULT, help=f"defaut: {RPC_DEFAULT}")
     sub = p.add_subparsers(dest="cmd", required=True)
 

@@ -5,9 +5,9 @@ from conftest import gas_of, expect_revert
 
 
 def test_constantes(tw, admin):
-    assert tw.functions.WIDTH().call() == 32
-    assert tw.functions.HEIGHT().call() == 32
-    assert tw.functions.CELLS().call() == 1024
+    assert tw.functions.WIDTH().call() == 48
+    assert tw.functions.HEIGHT().call() == 48
+    assert tw.functions.CELLS().call() == 2304
     assert tw.functions.COLORS().call() == 16
     assert tw.functions.epoch().call() == 1
     assert tw.functions.cooldownBlocks().call() == 0   # debit maximum par defaut
@@ -36,8 +36,8 @@ def test_toute_la_palette(w3, tw, accounts):
 
 
 def test_case_hors_grille(tw, accounts):
-    expect_revert("BadCell", tw.functions.claim(1024, 1), {"from": accounts[1]})
-    tw.functions.claim(1023, 1).transact({"from": accounts[1]})   # derniere case valide
+    expect_revert("BadCell", tw.functions.claim(2304, 1), {"from": accounts[1]})
+    tw.functions.claim(2303, 1).transact({"from": accounts[1]})   # derniere case valide
 
 
 def test_repeindre_sa_case_meme_couleur_refuse(tw, accounts):

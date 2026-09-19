@@ -1,4 +1,4 @@
-# Territory War — Monad Blitz
+# Splash War — Monad Blitz
 
 Une grille 32x32 que toute la salle repeint en direct. Tu choisis une couleur
 dans une palette de 16, tu cliques ou tu glisses, chaque case traversee prend ta
@@ -9,7 +9,7 @@ Il n'y a pas d'equipes codees. Chacun joue pour lui. Si la salle s'organise par
 couleur, les equipes emergent d'elles-memes.
 
 ```
-contracts/TerritoryWar.sol   le contrat, tout est commente
+contracts/SplashWar.sol   le contrat, tout est commente
 web/index.html               le front, un seul fichier, aucune installation
 bot.py                       gen / fund / refill / rank / payout / spam / watch
 scripts/deploy.py            compile, deploie, calibre le gas, sans Foundry
@@ -79,7 +79,7 @@ La cle reste dans `.env`, jamais sur une ligne de commande ni dans l'historique
 du shell. `.env` est dans `.gitignore`.
 
 Variante Remix si le reseau du campus bloque le telechargement de solc : coller
-`contracts/TerritoryWar.sol`, compiler en 0.8.24, deployer via Injected Provider.
+`contracts/SplashWar.sol`, compiler en 0.8.24, deployer via Injected Provider.
 
 ### 3. Lancer le front
 

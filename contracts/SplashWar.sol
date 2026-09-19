@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /**
- * TerritoryWar - une grille 32x32 que la salle repeint en temps reel.
+ * SplashWar - une grille 48x48 que la salle repeint en temps reel.
  *
  * Regle du jeu : tu choisis une couleur dans une palette de 16, tu cliques ou
  * tu glisses sur la grille, chaque case traversee prend ta couleur.
@@ -26,14 +26,14 @@ pragma solidity ^0.8.24;
  * de 1 a 16, le front decide a quoi il ressemble. Changer les teintes ne
  * demande donc aucun redeploiement.
  */
-contract TerritoryWar {
+contract SplashWar {
     // ---------------------------------------------------------------------
     // Constantes
     // ---------------------------------------------------------------------
 
-    uint16 public constant WIDTH = 32;
-    uint16 public constant HEIGHT = 32;
-    uint16 public constant CELLS = 1024; // WIDTH * HEIGHT
+    uint16 public constant WIDTH = 48;
+    uint16 public constant HEIGHT = 48;
+    uint16 public constant CELLS = 2304; // WIDTH * HEIGHT
     uint8 public constant COLORS = 16;
 
     // ---------------------------------------------------------------------
@@ -75,6 +75,17 @@ contract TerritoryWar {
     /// gagnant, jamais partage : meme la distribution ne serialise rien.
     mapping(address => uint256) public rewards;
 
+    /// Pseudo du joueur. Un slot par adresse, ecrit une fois, et surtout
+    /// JAMAIS lu ni ecrit par claim() : le chemin chaud reste intact.
+    /// Sert a rendre le classement lisible au videoprojecteur, parce que
+    /// "0x83f9...2473" ne veut rien dire pour une salle.
+    mapping(address => bytes32) public names;
+
+    /// Ou envoyer les gains. Le wallet jetable vit dans un localStorage : un
+    /// joueur qui veut recuperer sa part sur un vrai wallet le declare ici.
+    /// Vide = on paie le wallet de jeu lui-meme.
+    mapping(address => address) public payoutTo;
+
     // ---------------------------------------------------------------------
     // Evenements : c'est ce que le front ecoute pour se mettre a jour en direct
     // ---------------------------------------------------------------------
@@ -82,6 +93,8 @@ contract TerritoryWar {
     event Claimed(uint32 indexed epoch, uint16 indexed cell, address indexed player, uint8 color);
     event Reset(uint32 indexed epoch);
     event Rewarded(uint32 indexed epoch, address indexed player, uint256 amount, bool paid);
+    event Named(address indexed player, bytes32 name);
+    event PayoutSet(address indexed player, address indexed destination);
     event Funded(address indexed from, uint256 amount);
 
     // ---------------------------------------------------------------------
@@ -150,7 +163,7 @@ contract TerritoryWar {
     // Lectures (gratuites, utilisees par le front)
     // ---------------------------------------------------------------------
 
-    /// Etat complet du plateau : 1024 entiers, 0 = case vide, 1..16 = couleur.
+    /// Etat complet du plateau : 2304 entiers, 0 = case vide, 1..16 = couleur.
     /// Appele une fois au chargement de la page puis toutes les ~20 secondes
     /// pour resynchroniser, le reste du temps le front suit les evenements.
     function getColors() external view returns (uint8[] memory colors) {
@@ -176,7 +189,7 @@ contract TerritoryWar {
         }
     }
 
-    /// Proprietaire de chaque case : 1024 adresses, adresse nulle si la case
+    /// Proprietaire de chaque case : 2304 adresses, adresse nulle si la case
     /// est vide. C'est la base du systeme de recompense : le score qui compte
     /// n'est pas le nombre de cases posees mais le territoire encore detenu
     /// quand la manche se termine. Recalcule integralement a la lecture, donc
@@ -215,6 +228,42 @@ contract TerritoryWar {
             epoch += 1;
         }
         emit Reset(epoch);
+    }
+
+    // ---------------------------------------------------------------------
+    // Identite du joueur
+    //
+    // Deux ecritures facultatives, une par adresse, appelees au plus une fois
+    // chacune. Elles n'ajoutent rien a claim() : le jeu reste jouable sans
+    // jamais les appeler, et la parallelisation n'est pas entamee.
+    // ---------------------------------------------------------------------
+
+    /// Choisit un pseudo. bytes32 plutot que string : un seul slot, un cout
+    /// fixe, et 31 caracteres suffisent largement pour un pseudo.
+    function setName(bytes32 name) external {
+        names[msg.sender] = name;
+        emit Named(msg.sender, name);
+    }
+
+    /// Declare ou recevoir ses gains. A zero, on paie le wallet de jeu.
+    function setPayout(address destination) external {
+        payoutTo[msg.sender] = destination;
+        emit PayoutSet(msg.sender, destination);
+    }
+
+    /// Pseudos de plusieurs joueurs en une seule lecture : le classement en a
+    /// besoin pour tout le monde a la fois, un appel par joueur saturerait le RPC.
+    function namesOf(address[] calldata who) external view returns (bytes32[] memory out) {
+        out = new bytes32[](who.length);
+        for (uint256 i = 0; i < who.length; i++) {
+            out[i] = names[who[i]];
+        }
+    }
+
+    /// Destination effective des gains d'un joueur.
+    function destinationOf(address player) public view returns (address) {
+        address d = payoutTo[player];
+        return d == address(0) ? player : d;
     }
 
     // ---------------------------------------------------------------------
@@ -267,7 +316,11 @@ contract TerritoryWar {
         for (uint256 i = 0; i < winners.length; i++) {
             uint256 part = (pot * shares[i]) / total;
             if (part == 0) continue;
-            (bool ok, ) = winners[i].call{value: part, gas: 30000}("");
+            // Le gagnant a pu declarer un vrai wallet : on paie la destination,
+            // mais on credite le repli sur son adresse de jeu, la seule qu'il
+            // controle a coup sur.
+            address dest = destinationOf(winners[i]);
+            (bool ok, ) = dest.call{value: part, gas: 30000}("");
             if (!ok) {
                 rewards[winners[i]] += part; // repli : retrait manuel
             }

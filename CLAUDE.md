@@ -1,10 +1,10 @@
-# Contexte projet — Territory War (Monad Blitz)
+# Contexte projet — Splash War (Monad Blitz)
 
 ## Objectif
 
 Hackathon Monad Blitz sur campus, format court : environ 7 heures de build,
 puis un pitch de 3 minutes devant un jury orienté applications grand public.
-On construit **Territory War**, un jeu de capture de territoire 100 % onchain.
+On construit **Splash War**, un jeu de capture de territoire 100 % onchain.
 
 Une grille 32x32 (1024 cases), une palette de 16 couleurs, pas d'équipes codées.
 On choisit une couleur, on clique ou on glisse, chaque case traversée prend la
@@ -22,7 +22,7 @@ exister sur une chaîne lente.
 ## État actuel du repo
 
 ```
-contracts/TerritoryWar.sol   contrat complet, commenté, compile en 0.8.24, pas déployé
+contracts/SplashWar.sol   contrat complet, commenté, compile en 0.8.24, pas déployé
 web/index.html               front complet, un seul fichier, sans build
 bot.py                       gen / fund / refill / rank / payout / spam / watch
 scripts/deploy.py            compile + déploie + calibre le gas, sans Foundry

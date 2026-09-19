@@ -162,8 +162,37 @@ def test_la_lecture_du_plateau_reste_gratuite(w3, tw, accounts):
     getColors et getOwners sont des vues : elles doivent rester appelables
     meme plateau plein, sinon le front se fige pendant la demo.
     """
-    for cell in range(0, 1024, 7):
+    for cell in range(0, 2304, 13):
         tw.functions.claim(cell, (cell % 16) + 1).transact({"from": accounts[1]})
-    assert len(tw.functions.getColors().call()) == 1024
-    assert len(tw.functions.getOwners().call()) == 1024
-    assert sum(tw.functions.colorScores().call()) == len(range(0, 1024, 7))
+    assert len(tw.functions.getColors().call()) == 2304
+    assert len(tw.functions.getOwners().call()) == 2304
+    assert sum(tw.functions.colorScores().call()) == len(range(0, 2304, 13))
+
+
+def test_identite_hors_du_chemin_chaud(w3, tw, accounts):
+    """
+    Pseudo et destination de gains sont deux ecritures de plus dans le
+    contrat. Elles ne doivent rien changer a une pose : ni slot fixe modifie,
+    ni cout supplementaire.
+    """
+    a = accounts[1]
+    tw.functions.setName(b"MARTIN".ljust(32, b"\x00")).transact({"from": a})
+    tw.functions.setPayout(accounts[7]).transact({"from": a})
+
+    avant = slots(w3, tw.address)
+    tw.functions.claim(200, 5).transact({"from": a})
+    assert slots(w3, tw.address) == avant, "une pose a modifie un slot global"
+
+
+def test_le_pseudo_ne_renchérit_pas_la_pose(w3, tw, accounts):
+    """Le cout d'une pose doit etre le meme avec et sans pseudo declare."""
+    a, b = accounts[1], accounts[2]
+    tw.functions.setName(b"AVEC".ljust(32, b"\x00")).transact({"from": a})
+
+    tw.functions.claim(0, 1).transact({"from": a})       # rechauffe les deux slots
+    tw.functions.claim(1, 1).transact({"from": b})
+    avec = w3.eth.wait_for_transaction_receipt(
+        tw.functions.claim(0, 2).transact({"from": a})).gasUsed
+    sans = w3.eth.wait_for_transaction_receipt(
+        tw.functions.claim(1, 2).transact({"from": b})).gasUsed
+    assert abs(avec - sans) < 100, (avec, sans)

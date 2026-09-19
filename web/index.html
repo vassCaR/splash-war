@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>TERRITORY WAR // MONAD</title>
+<title>SPLASH WAR // MONAD</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11,21 +11,26 @@
 <script src="https://cdn.jsdelivr.net/npm/ethers@6/dist/ethers.umd.min.js"></script>
 <style>
   :root{
-    /* Fond et violets preleves sur le logo. */
-    --bg:#030119;
-    --panel:#0a0620;
-    --line:#241552;
-    --line2:#3a2278;
-    --ink:#ece6ff;
-    --dim:#7b6fa8;
+    /* Rampe prelevee sur LOGO_v4 : teintes 248 a 289 degres, saturation
+       toujours superieure a 73 %. Consequence a retenir : tout gris neutre
+       jure sur cette gamme, on desature vers l'indigo profond. Et le
+       contraste du texte vient de la luminance, pas de la teinte. */
+    --bg:#010010;
+    --surface:#12036D;
+    --panel:#0a0332;
+    --line:#22039E;
+    --line2:#3502CE;
+    --ink:#EFCCF7;
+    --dim:#8f78c4;
 
     --azur:#1a67ff;
     --turquoise:#27eddc;
     --magenta:#ff069d;
     --or:#ffc33b;
-    --violet:#a855f7;
-    --lilas:#d0a8ff;
-    --empty:#120a30;
+    --violet:#6B1FDB;
+    --violet2:#A859F2;
+    --lilas:#DDA4F6;
+    --empty:#0d0442;
 
     /* Aberration chromatique : les trois canaux d'un tube mal converge.
        Jaune-vert au centre, frange rouge a gauche, cyan a droite. */
@@ -42,13 +47,11 @@
     overflow:hidden;
     -webkit-font-smoothing:antialiased;
   }
-  body::before{
-    content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-    background:
-      radial-gradient(1000px 700px at 50% -15%, rgba(150,62,245,.20), transparent 62%),
-      radial-gradient(700px 500px at 0% 100%, rgba(26,103,255,.10), transparent 60%),
-      radial-gradient(700px 500px at 100% 100%, rgba(255,6,157,.09), transparent 60%);
-  }
+  /* Le shader occupe tout le fond ; on l'assombrit un peu pour que
+     l'interface reste lisible par-dessus. */
+  #bgfx{position:fixed;inset:0;z-index:0;pointer-events:none;background:#010010}
+  #bgfx::after{content:'';position:absolute;inset:0;background:rgba(3,1,20,.42)}
+  #bgfx canvas{opacity:.9}
   img{image-rendering:pixelated}
 
   /* ---------- typographies arcade ---------- */
@@ -66,25 +69,32 @@
   @keyframes clignote{0%,44%{opacity:1}50%,94%{opacity:.12}100%{opacity:1}}
   .blink{animation:clignote 1.15s steps(1,end) infinite}
 
-  .app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:1fr 348px}
-  .app.solo{grid-template-columns:1fr 310px}
+  .app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:1fr 340px}
+  .app.solo{grid-template-columns:1fr 330px}
 
   /* ---------- colonne gauche ---------- */
-  .stage{display:flex;flex-direction:column;min-width:0;padding:18px 26px 14px}
+  /* Le plateau est carre : empiler chiffres et palette au-dessus et en dessous
+     le comprimait en hauteur alors que la largeur restait inutilisee. Tout ce
+     qui n'est pas le plateau passe donc dans une colonne a gauche, comme le
+     panneau de commande d'une borne. Le plateau y gagne un bon quart. */
+  /* La scene ne contient plus que le titre et le plateau : tout le reste est
+     passe a droite. Le plateau prend donc toute la hauteur utile. */
+  .stage{display:flex;flex-direction:column;min-width:0;padding:14px 22px 18px;gap:10px}
   .brand{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
   .brand img{height:56px;width:auto}
   .brand .sub{
-    color:var(--dim);font-size:10px;letter-spacing:.24em;text-transform:uppercase;
-    border-left:2px solid var(--line2);padding-left:12px;line-height:1.8
+    color:var(--lilas);font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+    border-left:2px solid var(--line2);padding-left:12px;line-height:1.8;
+    text-shadow:0 2px 6px rgba(0,0,0,.95)
   }
-  .metrics{display:flex;gap:30px;margin:14px 0 12px;align-items:flex-end;flex-wrap:wrap}
-  .metric .k{font-size:9px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-  .metric .v{font-family:'Press Start 2P','IBM Plex Mono',monospace;font-size:21px;line-height:1.5}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:13px 10px;margin-bottom:14px}
+  .metric .k{font-size:8.5px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+  .metric .v{font-family:'Press Start 2P','IBM Plex Mono',monospace;font-size:15px;line-height:1.5}
   .metric .v small{font-size:10px;color:var(--dim);margin-left:5px}
   #tps .v{color:var(--turquoise);text-shadow:0 0 18px rgba(39,237,220,.55)}
 
   /* ---------- la borne : bezel, tube, verre ---------- */
-  .boardwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+  .boardwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;min-width:0}
   .cabinet{
     position:relative;padding:14px 14px 0;
     background:linear-gradient(180deg,#1b1038,#0d0722);
@@ -121,36 +131,44 @@
   .attract{
     position:absolute;inset:0;display:none;flex-direction:column;gap:14px;
     align-items:center;justify-content:center;text-align:center;
-    background:rgba(3,1,25,.52);font-family:'Press Start 2P',monospace;
+    background:rgba(3,1,25,.68);font-family:'Press Start 2P',monospace;
   }
   .attract.on{display:flex}
-  .attract .big{font-size:clamp(14px,2.3vw,26px)}
-  .attract .small{font-size:9px;color:var(--dim);line-height:2;letter-spacing:.05em}
+  .attract .big{font-size:clamp(16px,2.8vw,34px)}
+  .attract .small{font-size:10px;color:var(--lilas);line-height:2;letter-spacing:.05em}
 
   /* ---------- palette ---------- */
-  .palette{margin-top:14px;display:flex;flex-direction:column;gap:8px;align-items:center}
-  .swatches{display:grid;grid-template-columns:repeat(16,1fr);gap:6px;width:100%;max-width:600px}
+  /* Boutons de manette : pastille bombee, liseret sombre, reflet en haut a
+     gauche, et enfoncement net au clic. */
+  .palette{display:flex;flex-direction:column;gap:9px}
+  .swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+  /* Pastilles pixelisees : carre net, ombre dure d'un pixel, aucun degrade.
+     Les pastilles bombees juraient avec un plateau en aplats. */
   .sw{
-    aspect-ratio:1;cursor:pointer;position:relative;
-    border:2px solid rgba(0,0,0,.6);
-    box-shadow:0 3px 0 rgba(0,0,0,.65);
-    transition:transform .08s steps(2), box-shadow .08s steps(2);
+    aspect-ratio:1;cursor:pointer;position:relative;border-radius:0;
+    box-shadow:
+      inset -3px -3px 0 rgba(0,0,0,.42),
+      inset 3px 3px 0 rgba(255,255,255,.30),
+      0 0 0 2px #0b0530;
+    transition:transform .06s steps(1), box-shadow .06s steps(1);
   }
-  .sw:hover{transform:translateY(-3px);box-shadow:0 6px 0 rgba(0,0,0,.65)}
+  .sw:hover{transform:translateY(-2px)}
   .sw.on{
-    border-color:var(--ink);transform:translateY(-6px);
-    box-shadow:0 9px 0 rgba(0,0,0,.65), 0 0 22px -2px currentColor;
+    transform:translateY(-3px);
+    box-shadow:
+      inset -3px -3px 0 rgba(0,0,0,.42), inset 3px 3px 0 rgba(255,255,255,.42),
+      0 0 0 3px var(--ink), 0 0 18px -2px currentColor;
   }
+  .sw:active{transform:translateY(1px)}
   .palrow{
-    display:flex;justify-content:space-between;align-items:center;width:100%;max-width:600px;
-    font-size:10px;color:var(--dim);letter-spacing:.09em;text-transform:uppercase
+    display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+    font-size:8.5px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase
   }
-  .palrow b{font-family:'Press Start 2P',monospace;font-size:11px;letter-spacing:0}
-  @media (max-width:1150px){ .swatches{grid-template-columns:repeat(8,1fr)} }
+  .palrow b{font-family:'Press Start 2P',monospace;font-size:10px;letter-spacing:0}
 
   /* ---------- colonne droite ---------- */
   .side{
-    background:linear-gradient(180deg,var(--panel),#070419);
+    background:linear-gradient(180deg,rgba(10,6,32,.97),rgba(7,4,25,.98));
     border-left:2px solid var(--line);
     padding:20px;display:flex;flex-direction:column;gap:18px;overflow-y:auto;
   }
@@ -166,6 +184,7 @@
   .row{display:grid;grid-template-columns:13px 1fr 46px;align-items:center;gap:10px;font-size:11px}
   .row.me{background:rgba(168,85,247,.12);outline:1px solid rgba(168,85,247,.4);outline-offset:2px}
   .rk{color:var(--dim);font-variant-numeric:tabular-nums}
+  .pseudo-row{font-size:11px;letter-spacing:.04em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chip{width:11px;height:11px;border:1px solid rgba(0,0,0,.6)}
   .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
   .kv{display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:5px 0;
@@ -173,6 +192,18 @@
   .kv span:first-child{color:var(--dim)}
   .kv span:last-child{font-variant-numeric:tabular-nums;word-break:break-all;text-align:right}
   .mono-addr{font-size:10px}
+  .ident{display:flex;align-items:center;gap:11px;margin-bottom:11px}
+  .ident .av{
+    width:46px;height:46px;border-radius:10px;border:2px solid rgba(0,0,0,.7);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.14), 0 3px 0 rgba(0,0,0,.6);flex:none
+  }
+  .identtxt{min-width:0}
+  .pseudo{
+    font-family:'Press Start 2P',monospace;font-size:11px;color:var(--lilas);
+    line-height:1.5;word-break:break-all
+  }
+  .ligne{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:stretch}
+  button.act.mini{width:auto;padding:0 13px;font-size:9px;letter-spacing:.1em}
   .fuel{height:9px;background:var(--empty);margin-top:10px;overflow:hidden;
         border:1px solid rgba(0,0,0,.6)}
   .fuel i{display:block;height:100%;background:var(--turquoise);transition:width .3s steps(6)}
@@ -180,21 +211,44 @@
   /* ---------- boutons de borne ----------
      Chunky, arete basse marquee, s'enfoncent au clic. Le bouton principal
      porte le traitement INSERT COIN. */
+  /* Boutons de console : coque bombee, liseret sombre, socle epais qui
+     s'ecrase au clic. Meme grammaire que les pastilles de la palette. */
   button.act, a.act{
-    display:block;width:100%;padding:11px 10px;background:#140a33;color:var(--ink);
-    border:2px solid var(--line2);border-bottom-width:5px;text-align:center;text-decoration:none;
+    position:relative;display:block;width:100%;padding:12px 10px;
+    background:linear-gradient(180deg,#22124f,#150a34);
+    color:var(--ink);border:2px solid rgba(0,0,0,.75);border-radius:9px;
+    text-align:center;text-decoration:none;
     font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;
-    text-transform:uppercase;cursor:pointer;transition:.08s steps(2)
+    text-transform:uppercase;cursor:pointer;
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.18),
+               inset 0 -3px 0 rgba(0,0,0,.4),
+               0 5px 0 #0b0522;
+    transition:transform .07s steps(2), box-shadow .07s steps(2), background .12s;
   }
-  button.act:hover, a.act:hover{border-color:var(--violet);color:var(--lilas);background:#1b0e45}
-  button.act:active, a.act:active{border-bottom-width:2px;transform:translateY(3px)}
+  button.act:hover, a.act:hover{
+    background:linear-gradient(180deg,#2d1868,#1b0e43);color:var(--lilas)
+  }
+  button.act:active, a.act:active{
+    transform:translateY(4px);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.12), 0 1px 0 #0b0522;
+  }
+  /* Le bouton principal : celui qu'on frappe pour lancer la partie. */
   a.coin, button.coin{
-    font-family:'Press Start 2P',monospace;font-size:11px;letter-spacing:.02em;
-    padding:15px 10px;background:#0b0620;border-color:#4a2d96;border-bottom-color:#2a1857;
+    font-family:'Press Start 2P',monospace;font-size:12px;letter-spacing:.02em;
+    padding:17px 10px;border-radius:11px;
+    background:linear-gradient(180deg,#3a1f7a,#1d0d4a);
+    border-color:rgba(0,0,0,.8);
     color:var(--chroma);
-    text-shadow:-2px 0 0 var(--chroma-r), 2px 0 0 var(--chroma-b), 0 3px 0 rgba(0,0,0,.85);
+    text-shadow:-2px 0 0 var(--chroma-r), 2px 0 0 var(--chroma-b), 0 3px 0 rgba(0,0,0,.9);
+    box-shadow:inset 0 3px 0 rgba(255,255,255,.26),
+               inset 0 -4px 0 rgba(0,0,0,.45),
+               0 6px 0 #100630, 0 0 26px -6px rgba(188,54,243,.8);
   }
-  a.coin:hover, button.coin:hover{background:#16093a;border-color:var(--or);color:var(--chroma)}
+  a.coin:hover, button.coin:hover{background:linear-gradient(180deg,#4a2896,#25115e)}
+  a.coin:active, button.coin:active{
+    transform:translateY(5px);
+    box-shadow:inset 0 3px 0 rgba(255,255,255,.18), 0 1px 0 #100630;
+  }
 
   .warn{border:2px solid #4a3410;background:#1a1004;color:var(--or);
         padding:10px 11px;font-size:10.5px;line-height:1.6}
@@ -207,7 +261,7 @@
   .foot{font-size:9.5px;color:#4a4070;letter-spacing:.09em;line-height:1.85}
 
   /* ---------- mode projecteur ---------- */
-  .solo .stage{
+  .solo .stage-inutilise{
     padding:30px 34px;
     display:grid;grid-template-columns:270px 1fr;grid-template-rows:auto 1fr;
     column-gap:34px;row-gap:16px;
@@ -215,15 +269,16 @@
   .solo .brand{grid-column:1 / -1}
   .solo .brand img{height:96px}
   .solo .brand .sub{font-size:12px}
-  .solo .metrics{grid-column:1;grid-row:2;flex-direction:column;align-items:flex-start;
-                 gap:30px;margin:0;justify-content:center}
+  .solo .metrics{grid-template-columns:1fr;gap:20px}
   .solo .metric .k{font-size:11px;margin-bottom:8px}
-  .solo .metric .v{font-size:38px}
+  .solo .metric .v{font-size:26px}
   .solo .metric .v small{font-size:15px}
-  .solo .boardwrap{grid-column:2;grid-row:2}
+
   .solo .palette{display:none}
+  .solo .stage{grid-template-columns:250px 1fr}
   .solo .side{display:flex}
-  .solo .side .block:nth-child(n+3){display:none}
+  .solo .side .block:nth-child(n+4){display:none}
+  .solo .palette{display:none}
   .solo .side h2{font-size:11px}
   .solo .side .row{font-size:14px;grid-template-columns:16px 1fr 58px}
   .solo .side .stack{height:18px}
@@ -239,8 +294,11 @@
     .metric .v{font-size:14px}
     .metric .k{font-size:8px;letter-spacing:.13em}
     .metrics{gap:14px;margin:12px 0 10px}
-    .stage{padding:14px 16px 12px}
-    .boardwrap{min-height:min(96vw,58vh)}
+    .stage{padding:12px 12px 8px;gap:8px}
+    .metrics{grid-template-columns:repeat(4,1fr);gap:9px 6px}
+    .metric .v{font-size:12px}
+    .swatches{grid-template-columns:repeat(8,1fr);gap:6px}
+    .boardwrap{min-height:min(97vw,62vh)}
     .cabinet{padding:9px 9px 0;border-radius:7px}
     .bezel{font-size:8px;padding:7px 2px 8px}
     .swatches{grid-template-columns:repeat(8,1fr);max-width:330px;gap:5px}
@@ -250,20 +308,15 @@
 </style>
 </head>
 <body>
+<div id="bgfx" aria-hidden="true"></div>
 <div class="app" id="app">
 
   <section class="stage">
     <div class="brand">
-      <img src="wordmark.png" alt="Territory War" />
+      <img src="wordmark.png" alt="Splash War" />
       <span class="sub">1 case = 1 transaction<br>monad testnet</span>
     </div>
 
-    <div class="metrics">
-      <div class="metric" id="tps"><div class="k">Transactions / sec</div><div class="v">0.0</div></div>
-      <div class="metric"><div class="k">Poses (manche)</div><div class="v" id="mTotal">0</div></div>
-      <div class="metric"><div class="k">Cases peintes</div><div class="v" id="mFill">0<small>/1024</small></div></div>
-      <div class="metric"><div class="k">Bloc</div><div class="v" id="mBlock">&mdash;</div></div>
-    </div>
 
     <div class="boardwrap">
       <div class="cabinet">
@@ -282,16 +335,27 @@
       </div>
     </div>
 
-    <div class="palette" id="palette">
-      <div class="swatches" id="swatches"></div>
-      <div class="palrow">
-        <span>Clique ou glisse sur la grille</span>
-        <b id="curName">&mdash;</b>
-      </div>
-    </div>
   </section>
 
   <aside class="side" id="side">
+    <div class="block" id="blocJeu">
+      <div class="metrics">
+        <div class="metric" id="tps"><div class="k">Transactions / sec</div><div class="v">0.0</div></div>
+        <div class="metric"><div class="k">Poses (manche)</div><div class="v" id="mTotal">0</div></div>
+        <div class="metric"><div class="k">Cases peintes</div><div class="v" id="mFill">0<small>/2304</small></div></div>
+        <div class="metric"><div class="k">Bloc</div><div class="v" id="mBlock">&mdash;</div></div>
+      </div>
+
+      <div class="palette" id="palette">
+        <div class="swatches" id="swatches"></div>
+        <div class="palrow">
+          <span>Clique ou glisse sur la grille</span>
+          <b id="curName">&mdash;</b>
+        </div>
+      </div>
+    </div>
+    </div>
+
     <div class="block">
       <h2>Classement des couleurs</h2>
       <div class="stack" id="stack"></div>
@@ -307,7 +371,19 @@
 
     <div class="block">
       <h2>Ton wallet jetable</h2>
-      <div class="kv"><span>Adresse</span><span class="mono-addr" id="wAddr">&mdash;</span></div>
+      <div class="ident">
+        <img src="avatar.png" alt="" class="av" />
+        <div class="identtxt">
+          <div id="wName" class="pseudo">SANS NOM</div>
+          <div class="mono-addr" id="wAddr">&mdash;</div>
+        </div>
+      </div>
+      <div class="ligne">
+        <input class="cfg" id="inName" maxlength="16" placeholder="ton pseudo" />
+        <button class="act mini" id="btnName">OK</button>
+      </div>
+      <p class="foot" style="margin:6px 0 10px">Le pseudo passe onchain, une fois.
+      Sans lui tu apparais en hexadecimal au videoprojecteur.</p>
       <div class="kv"><span>Solde</span><span id="wBal">&mdash;</span></div>
       <div class="kv"><span>Cases posees</span><span id="wSent">0</span></div>
       <div class="kv"><span>Echecs</span><span id="wErr">0</span></div>
@@ -317,7 +393,13 @@
         <button class="act" id="btnCopyAddr">Copier mon adresse</button>
         <button class="act" id="btnCopyKey">Copier la cle privee</button>
       </div>
-      <p class="foot" style="margin-top:9px">Cle generee dans ce navigateur, stockee en localStorage. Testnet uniquement.</p>
+      <p class="foot" style="margin-top:9px">Cle generee dans ce navigateur, stockee en
+      localStorage. Testnet uniquement.</p>
+      <div class="ligne" style="margin-top:10px">
+        <input class="cfg" id="inPayout" placeholder="0x... ou encaisser tes gains" />
+        <button class="act mini" id="btnPayout">OK</button>
+      </div>
+      <p class="foot" id="payoutEtat" style="margin-top:6px">Gains verses sur ce wallet jetable.</p>
     </div>
 
     <div class="block">
@@ -358,7 +440,7 @@ const DEFAULTS = {
   // reellement couter, en s'appuyant sur ce que le front sait deja du plateau.
   // Recalibre par scripts/deploy.py sur une mesure eth_estimateGas reelle.
   GAS: {
-    fixed: 27351n,      // intrinseque + calldata + evenement + logique (mesure)
+    fixed: 27420n,      // intrinseque + calldata + evenement + logique (mesure)
     cold:  22100n,      // SSTORE d'un slot encore a zero
     warm:   5000n,      // SSTORE d'un slot deja non nul
     margin:   115n      // pourcentage de marge
@@ -381,7 +463,7 @@ const CFG = {
 };
 const SPECTATE = qs.has("spectate");
 
-const W = 32, H = 32, CELLS = W * H;
+const W = 48, H = 48, CELLS = W * H;
 
 /* La palette n'est pas onchain : le contrat ne stocke qu'un indice de 1 a 16.
    Changer ces teintes ne demande aucun redeploiement. */
@@ -404,7 +486,7 @@ const PALETTE = [
   { id:16, name:"NEIGE",     hex:"#fbf5fd" }
 ];
 const COLOR_HEX = ["#12151f", ...PALETTE.map(c => c.hex)];
-const EMPTY_HEX = "#120a30";
+const EMPTY_HEX = "#150a45";
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 const ABI = [
@@ -412,6 +494,10 @@ const ABI = [
   "function getColors() view returns (uint8[])",
   "function getOwners() view returns (address[])",
   "function claimsOf(address player) view returns (uint32)",
+  "function namesOf(address[] who) view returns (bytes32[])",
+  "function destinationOf(address player) view returns (address)",
+  "function setName(bytes32 name) external",
+  "function setPayout(address destination) external",
   "function epoch() view returns (uint32)",
   "event Claimed(uint32 indexed epoch, uint16 indexed cell, address indexed player, uint8 color)"
 ];
@@ -431,6 +517,10 @@ let dirty = true;
    Volontairement separe du flux de couleurs : c'est une reponse de 32 Ko,
    on ne la demande pas a chaque tour de boucle. */
 let owners = new Array(CELLS).fill(null);
+
+/* Pseudos, relus avec les proprietaires. Un classement en hexadecimal ne veut
+   rien dire au videoprojecteur : c'est toute la raison d'etre du pseudo. */
+let pseudos = new Map();
 
 /* Le slot du joueur est-il deja ecrit ? Determine si sa mise a jour coute
    un SSTORE a froid (22100) ou a chaud (5000). Lu une fois au demarrage. */
@@ -536,40 +626,31 @@ function layout() {
 function draw() {
   if (dirty) {
     const now = performance.now();
-    ctx.fillStyle = "#050225";
+    ctx.fillStyle = "#0b0530";
     ctx.fillRect(0, 0, px * W, px * H);
     let live = false;
-    const relief = px >= 11;      // sous cette taille le biseau devient de la bouillie
     for (let i = 0; i < CELLS; i++) {
       const x = (i % W) * px, y = ((i / W) | 0) * px;
       const t = board[i];
       ctx.fillStyle = t ? COLOR_HEX[t] : EMPTY_HEX;
-      ctx.fillRect(x, y, px - 1, px - 1);
-
-      // Le relief des lettres de borne : arete claire en haut a gauche,
-      // sombre en bas a droite. C'est ce qui donne le volume chunky.
-      if (t && relief) {
-        ctx.fillStyle = "rgba(255,255,255,.26)";
-        ctx.fillRect(x, y, px - 1, 2);
-        ctx.fillRect(x, y, 2, px - 1);
-        ctx.fillStyle = "rgba(0,0,0,.38)";
-        ctx.fillRect(x, y + px - 3, px - 1, 2);
-        ctx.fillRect(x + px - 3, y, 2, px - 1);
-      }
+      ctx.fillRect(x, y, px, px);          // cases jointives : c'est du pixel art
 
       const age = now - flash[i];
-      if (age < 620) {                       // remanence de phosphore
+      if (age < 620) {                     // remanence de phosphore
         live = true;
-        const k = 1 - age / 620;
-        ctx.globalAlpha = k;
+        ctx.globalAlpha = 1 - age / 620;
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x, y, px - 1, px - 1);
-        if (relief) {                        // debordement sur les cases voisines
-          ctx.globalAlpha = k * 0.22;
-          ctx.fillRect(x - 2, y - 2, px + 3, px + 3);
-        }
+        ctx.fillRect(x, y, px, px);
         ctx.globalAlpha = 1;
       }
+    }
+
+    // Subdivisions tous les 8 : reperes de lecture sans quadriller chaque case.
+    // Un liseré par case hachurait le plateau et cassait les aplats.
+    ctx.fillStyle = "rgba(160,120,255,.13)";
+    for (let k = 8; k < W; k += 8) {
+      ctx.fillRect(k * px, 0, 1, px * H);
+      ctx.fillRect(0, k * px, px * W, 1);
     }
     dirty = live;
   }
@@ -603,7 +684,7 @@ function paintUI() {
       <span class="num">${rest}</span>
     </div>` : "");
 
-  $("mFill").innerHTML = filled + "<small>/1024</small>";
+  $("mFill").innerHTML = filled + "<small>/2304</small>";
   $("mTotal").textContent = totalClaims;
   $("cEpoch").textContent = epoch || "—";
   $("wSent").textContent = sent;
@@ -634,10 +715,13 @@ function paintHolders() {
   $("holders").innerHTML = top.length ? top.map(([addr, n]) => {
     const isMe = addr.toLowerCase() === me;
     const rank = rows.findIndex(r => r[0] === addr) + 1;
+    const nom = pseudos.get(addr.toLowerCase());
+    const etiquette = isMe ? (nom || "toi") : (nom || short(addr));
+    const classe = nom ? "pseudo-row" : "mono-addr";
     return `<div class="row ${isMe ? "me" : ""}">
       <span class="rk">${rank}</span>
-      <span class="mono-addr" style="color:${isMe ? "var(--cyan)" : "var(--ink)"}">
-        ${isMe ? "toi" : short(addr)}</span>
+      <span class="${classe}" style="color:${isMe ? "var(--violet2)" : "var(--ink)"}">
+        ${etiquette}</span>
       <span class="num">${n}</span>
     </div>`;
   }).join("") : `<div class="foot">Personne ne tient encore de territoire.</div>`;
@@ -651,7 +735,12 @@ function paintHolders() {
 function paintFuel() {
   if (!balanceKnown || !fee) return;
   const unit = costOf(gasWorst());
-  const credits = unit > 0n ? Number(balanceWei / unit) : 0;
+  // Si le gas ne coute rien (base fee a zero sur une chaine locale, ou un
+  // RPC qui renvoie 0), le nombre de poses possibles n'est pas nul mais
+  // illimite. Conclure a zero credit verrouillait le plateau sur un wallet
+  // pourtant plein, et l'attract mode avalait tous les clics.
+  const credits = unit > 0n ? Number(balanceWei / unit)
+                            : (balanceWei > 0n ? 99 : 0);
   const mon = Number(ethers.formatEther(balanceWei));
 
   $("wBal").innerHTML = credits > 0
@@ -669,7 +758,7 @@ function paintFuel() {
 
   // Attract mode : une borne sans credit affiche INSERT COIN. Ici c'est
   // litteralement vrai, le bouton mene au faucet.
-  const vide = credits < 1;
+  const vide = credits < 1 && balanceWei === 0n;
   $("attract").classList.toggle("on", vide);
   $("bezelState").innerHTML = vide
     ? '<span class="chroma blink">INSERT COIN</span>'
@@ -719,6 +808,7 @@ async function initChain() {
     // Le slot joueur est-il deja ecrit ? Conditionne le gas_limit des envois.
     const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
     playerSlotWarm = Number(await c.claimsOf(wallet.address)) > 0;
+    await chargerIdentite();
     status("");
   } catch (e) {
     status("RPC injoignable : " + (e.shortMessage || e.message));
@@ -762,6 +852,20 @@ async function refreshOwners() {
   try {
     const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
     owners = (await c.getOwners()).map(a => a);
+
+    // Pseudos du haut de tableau, en UNE requete : un appel par joueur
+    // saturerait le RPC public le jour de la demo.
+    const compte = new Map();
+    for (const a of owners) if (a && a !== ZERO) compte.set(a, (compte.get(a) || 0) + 1);
+    const tete = [...compte.entries()].sort((x, y) => y[1] - x[1]).slice(0, 12).map(e => e[0]);
+    if (wallet && !tete.includes(wallet.address)) tete.push(wallet.address);
+    if (tete.length) {
+      const bruts = await c.namesOf(tete);
+      tete.forEach((a, i) => {
+        const nom = depuisBytes32(bruts[i]);
+        if (nom) pseudos.set(a.toLowerCase(), nom);
+      });
+    }
     paintHolders();
   } catch {}
 }
@@ -913,6 +1017,88 @@ async function sendClaim({ cell, celluleVierge }) {
   paintUI();
 }
 
+/* ---------------- actions ponctuelles : pseudo, destination ----------------
+   Hors du chemin chaud, appelees au plus une fois chacune. Elles empruntent
+   le meme compteur de nonce que les poses pour ne pas creer de trou. */
+async function envoyerAction(nomFonction, args, gas, libelle, bouton) {
+  if (!wallet || !fee || !ethers.isAddress(CFG.CONTRACT)) return false;
+  const ancien = bouton ? bouton.textContent : "";
+  if (bouton) { bouton.disabled = true; bouton.textContent = "..."; }
+  try {
+    const tx = await wallet.sendTransaction({
+      to: CFG.CONTRACT,
+      data: iface.encodeFunctionData(nomFonction, args),
+      gasLimit: gas, nonce: nextNonce++, chainId: CFG.CHAIN_ID, type: 2, value: 0n,
+      maxFeePerGas: fee.maxFeePerGas, maxPriorityFeePerGas: fee.maxPriorityFeePerGas
+    });
+    await tx.wait();
+    if (bouton) { bouton.textContent = "OK"; setTimeout(() => {
+      bouton.textContent = ancien; bouton.disabled = false; }, 1400); }
+    return true;
+  } catch (e) {
+    try { nextNonce = await provider.getTransactionCount(wallet.address, "pending"); } catch {}
+    status(libelle + " a echoue : " + (e.shortMessage || e.message || "").slice(0, 70), "err");
+    if (bouton) { bouton.textContent = ancien; bouton.disabled = false; }
+    return false;
+  }
+}
+
+/** bytes32 plutot que string : un seul slot, un cout fixe. 31 octets utiles. */
+function versBytes32(texte) {
+  const octets = new TextEncoder().encode(texte.slice(0, 31));
+  const plein = new Uint8Array(32);
+  plein.set(octets.slice(0, 31));
+  return ethers.hexlify(plein);
+}
+
+function depuisBytes32(hex) {
+  try {
+    const brut = ethers.getBytes(hex);
+    let fin = brut.length;
+    while (fin > 0 && brut[fin - 1] === 0) fin--;
+    return new TextDecoder().decode(brut.slice(0, fin));
+  } catch { return ""; }
+}
+
+async function chargerIdentite() {
+  try {
+    const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
+    const [nom, dest] = await Promise.all([
+      c.namesOf([wallet.address]),
+      c.destinationOf(wallet.address)
+    ]);
+    const lisible = depuisBytes32(nom[0]);
+    if (lisible) { $("wName").textContent = lisible; $("inName").value = lisible; }
+    majDestination(dest);
+  } catch {}
+}
+
+function majDestination(dest) {
+  const propre = dest && dest.toLowerCase() !== wallet.address.toLowerCase();
+  $("payoutEtat").innerHTML = propre
+    ? `Gains verses sur <span style="color:var(--lilas)">${short(dest)}</span>.`
+    : "Gains verses sur ce wallet jetable.";
+  if (propre) $("inPayout").value = dest;
+}
+
+$("btnName").onclick = async () => {
+  const nom = $("inName").value.trim();
+  if (!nom) return;
+  if (await envoyerAction("setName", [versBytes32(nom)], 60000n, "Le pseudo", $("btnName"))) {
+    $("wName").textContent = nom.slice(0, 31);
+    pseudos.set(wallet.address.toLowerCase(), nom.slice(0, 31));
+    paintHolders();
+  }
+};
+
+$("btnPayout").onclick = async () => {
+  const dest = $("inPayout").value.trim();
+  if (!ethers.isAddress(dest)) { status("Adresse invalide.", "err"); return; }
+  if (await envoyerAction("setPayout", [dest], 60000n, "La destination", $("btnPayout"))) {
+    majDestination(dest);
+  }
+};
+
 /* ------------------------- interactions ----------------------- */
 function cellAt(ev) {
   const r = cv.getBoundingClientRect();
@@ -979,6 +1165,34 @@ addEventListener("resize", layout);
 draw();
 setInterval(paintUI, 500);
 initChain();
+</script>
+<script src="crtwarp.js"></script>
+<script>
+/* Plasma de tube cathodique en fond. Reglages repris du composant fourni.
+   Sur petit ecran on baisse la cadence : un shader plein ecran a 30 images
+   par seconde entre en concurrence avec l'envoi des transactions. */
+CRTWarp.mount(document.getElementById("bgfx"), {
+  color: "#6B1FDB",
+  backgroundColor: "#010010",
+  speed: 0.2,
+  curvature: 0.25,
+  scanlineStrength: 0.25,
+  scanlineFrequency: 225,
+  waveAmplitude: 0.3,
+  waveFrequency: 2.5,
+  bloom: 1.5,
+  bloomRadius: 1,
+  noise: 0.1,
+  vignette: 0,
+  brightness: 1.25,
+  pixelation: 1,
+  rgbShift: 0.015,
+  mouseReact: true,
+  mouseStrength: 0.5,
+  dpr: 1,
+  fps: innerWidth < 900 ? 18 : 30,
+  paused: false
+});
 </script>
 <script src="sound.js"></script>
 </body>

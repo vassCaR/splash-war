@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-deploy.py - compile et deploie TerritoryWar sur Monad testnet, sans Foundry.
+deploy.py - compile et deploie SplashWar sur Monad testnet, sans Foundry.
 
     export TW_DEPLOYER_KEY=0x...
     python scripts/deploy.py
@@ -32,7 +32,7 @@ except ImportError:
     sys.exit("py-solc-x manquant : pip install -r requirements.txt")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE = os.path.join(ROOT, "contracts", "TerritoryWar.sol")
+SOURCE = os.path.join(ROOT, "contracts", "SplashWar.sol")
 FRONT = os.path.join(ROOT, "web", "index.html")
 OUT = os.path.join(ROOT, "deployment.json")
 
@@ -72,7 +72,7 @@ def compile_contract():
         [SOURCE], output_values=["abi", "bin"],
         solc_version=SOLC, optimize=True, optimize_runs=200,
     )
-    key = next(k for k in compiled if k.endswith(":TerritoryWar"))
+    key = next(k for k in compiled if k.endswith(":SplashWar"))
     art = compiled[key]
     print(f"bytecode {len(art['bin']) // 2} octets")
     return art["abi"], art["bin"]

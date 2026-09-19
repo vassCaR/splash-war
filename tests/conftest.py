@@ -11,7 +11,7 @@ import solcx
 from web3 import Web3, EthereumTesterProvider
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE = os.path.join(ROOT, "contracts", "TerritoryWar.sol")
+SOURCE = os.path.join(ROOT, "contracts", "SplashWar.sol")
 SOLC = "0.8.24"
 
 # Contrat qui refuse tout paiement : sert a verifier le repli de endRound.
@@ -30,7 +30,7 @@ def _compile():
     main = solcx.compile_files([SOURCE], output_values=["abi", "bin"],
                                solc_version=SOLC, optimize=True, optimize_runs=200,
                                evm_version="shanghai")
-    key = next(k for k in main if k.endswith(":TerritoryWar"))
+    key = next(k for k in main if k.endswith(":SplashWar"))
     rej = solcx.compile_source(REJECTER, output_values=["abi", "bin"],
                                solc_version=SOLC, evm_version="shanghai")
     rkey = next(k for k in rej if k.endswith(":Rejecter"))
@@ -57,7 +57,7 @@ def admin(accounts):
 
 @pytest.fixture
 def tw(w3, admin):
-    """TerritoryWar fraichement deploye, admin = accounts[0]."""
+    """SplashWar fraichement deploye, admin = accounts[0]."""
     c = w3.eth.contract(abi=ART["abi"], bytecode=ART["bin"])
     tx = c.constructor().transact({"from": admin})
     rcpt = w3.eth.wait_for_transaction_receipt(tx)

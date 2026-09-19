@@ -6,3 +6,5 @@ venv/
 __pycache__/
 *.pyc
 *:Zone.Identifier
+node_modules/
+package-lock.json

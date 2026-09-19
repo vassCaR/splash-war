@@ -166,7 +166,7 @@ def test_claim_data_encode_correctement(tw):
 @pytest.fixture
 def tw_admin(w3, accounts):
     """
-    TerritoryWar deploye par un compte dont on possede la cle, pour pouvoir
+    SplashWar deploye par un compte dont on possede la cle, pour pouvoir
     exercer les fonctions d'administration comme le ferait bot.py payout.
     """
     from conftest import ART
@@ -183,9 +183,13 @@ def tw_admin(w3, accounts):
     return admin, w3.eth.contract(address=addr, abi=ART["abi"])
 
 
+_cles_utilisees = []
+
+
 def _peindre(w3, accounts, contrat, repartition):
     """Fait poser des cases par des joueurs jetables. repartition = [n1, n2, ...]"""
     joueurs, cell = [], 0
+    _cles_utilisees.clear()
     max_fee, tip = bot.fees(w3)
     for n in repartition:
         c = bot.Account.create()
@@ -196,6 +200,7 @@ def _peindre(w3, accounts, contrat, repartition):
             sender.fire(cell, 4, max_fee, tip)
             cell += 1
         joueurs.append(c.address)
+        _cles_utilisees.append(c)
     return joueurs
 
 
@@ -205,9 +210,10 @@ def test_classement_par_territoire(w3, tw, accounts, monkeypatch, tmp_path):
     c = bot.contract_of(w3, tw.address)
 
     classement = bot.leaderboard(w3, c)
-    assert [a for a, _, _ in classement] == joueurs
-    assert [n for _, n, _ in classement] == [5, 3, 1]
-    assert [p for _, _, p in classement] == [5, 3, 1]   # poses = tenu, personne recouvert
+    assert [a for a, _, _, _ in classement] == joueurs
+    assert [n for _, n, _, _ in classement] == [5, 3, 1]
+    assert [p for _, _, p, _ in classement] == [5, 3, 1]  # poses = tenu, personne recouvert
+    assert [x for _, _, _, x in classement] == ["", "", ""]  # aucun pseudo declare
 
 
 def test_le_classement_recompense_ce_qu_on_tient_pas_ce_qu_on_a_pose(
@@ -235,7 +241,7 @@ def test_le_classement_recompense_ce_qu_on_tient_pas_ce_qu_on_a_pose(
         ss.fire(cell, 9, max_fee, tip)
 
     classement = bot.leaderboard(w3, bot.contract_of(w3, tw.address))
-    par_adresse = {a: (tenu, poses) for a, tenu, poses in classement}
+    par_adresse = {a: (tenu, poses) for a, tenu, poses, _ in classement}
     assert par_adresse[bosseur.address] == (2, 10)   # a beaucoup pose, tient peu
     assert par_adresse[sniper.address] == (8, 8)
     assert classement[0][0] == sniper.address        # le sniper mene
@@ -274,3 +280,28 @@ def test_payout_dry_run_ne_touche_a_rien(w3, accounts, tw_admin, monkeypatch, tm
 
     assert contrat.functions.prizePool().call() == Web3.to_wei(4, "ether")
     assert contrat.functions.epoch().call() == 1
+
+
+def test_le_classement_remonte_les_pseudos(w3, tw, accounts, monkeypatch, tmp_path):
+    """
+    Le classement doit etre lisible au videoprojecteur : c'est toute la raison
+    d'etre du pseudo. Il est lu en une seule requete pour tous les joueurs.
+    """
+    monkeypatch.chdir(tmp_path)
+    joueurs = _peindre(w3, accounts, tw, [4, 2])
+    max_fee, tip = bot.fees(w3)
+
+    # le premier se nomme, le second non
+    c_ecriture = w3.eth.contract(address=tw.address, abi=tw.abi)
+    donnees = c_ecriture.encode_abi("setName", args=[b"ALICE".ljust(32, b"\x00")])
+    cle = [k for k in _cles_utilisees if k.address == joueurs[0]][0]
+    tx = {"to": tw.address, "data": donnees, "gas": 80000, "value": 0,
+          "maxFeePerGas": max_fee, "maxPriorityFeePerGas": tip, "type": 2,
+          "chainId": bot.CHAIN_ID,
+          "nonce": w3.eth.get_transaction_count(cle.address, "pending")}
+    w3.eth.send_raw_transaction(bot.raw_of(cle.sign_transaction(tx)))
+
+    classement = bot.leaderboard(w3, bot.contract_of(w3, tw.address))
+    pseudos = {a: p for a, _, _, p in classement}
+    assert pseudos[joueurs[0]] == "ALICE"
+    assert pseudos[joueurs[1]] == ""
