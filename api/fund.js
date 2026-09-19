@@ -34,6 +34,20 @@ function refus(res, code, raison) {
 }
 
 export default async function handler(req, res) {
+  // Diagnostic : uniquement des noms de variables et des booleens, jamais une
+  // valeur. Sert a verifier que l'environnement arrive bien jusqu'a la fonction.
+  if (req.method === "GET") {
+    const noms = Object.keys(process.env).filter(k => k.startsWith("TW_") || k.startsWith("MONAD_"));
+    return res.status(200).json({
+      diagnostic: true,
+      variables_tw_visibles: noms,
+      funder_defini: Boolean(process.env.TW_FUNDER_KEY),
+      deployer_defini: Boolean(process.env.TW_DEPLOYER_KEY),
+      longueur_funder: (process.env.TW_FUNDER_KEY || "").length,
+      vercel_env: process.env.VERCEL_ENV || null,
+    });
+  }
+
   if (req.method !== "POST") return refus(res, 405, "methode");
 
   const cle = process.env.TW_FUNDER_KEY || process.env.TW_DEPLOYER_KEY;
