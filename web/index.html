@@ -1056,7 +1056,14 @@ async function initChain() {
   try {
     nextNonce = await provider.getTransactionCount(wallet.address, "pending");
     await refreshFee();
-    await resync();
+    // Le chargement initial du plateau est le seul moment ou un echec se voit
+    // vraiment : un arrivant resterait devant une toile vide alors que la
+    // partie est en cours. On reessaie plutot que d'attendre la
+    // resynchronisation periodique.
+    for (let essai = 0; essai < 3; essai++) {
+      try { await resync(); break; }
+      catch (e) { if (essai === 2) throw e; await sleep(700 * (essai + 1)); }
+    }
     // Le slot joueur est-il deja ecrit ? Conditionne le gas_limit des envois.
     const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
     playerSlotWarm = Number(await c.claimsOf(wallet.address)) > 0;
