@@ -42,7 +42,8 @@ BLOCKS_BEFORE_SPEND = 3          # retard d'execution Monad
 GETLOGS_MAX_RANGE = 100          # plafond du RPC public
 
 SELECTOR = Web3.keccak(text="claim(uint16,uint8)")[:4]
-CLAIMED_TOPIC = Web3.keccak(text="Claimed(uint32,uint16,address,uint8)").hex()
+_topic = Web3.keccak(text="Claimed(uint32,uint16,address,uint8)").hex()
+CLAIMED_TOPIC = _topic if _topic.startswith("0x") else "0x" + _topic
 TEAM_NAMES = {1: "ACID", 2: "MAGENTA", 3: "CYAN", 4: "AMBER"}
 W = H = 32
 
@@ -342,7 +343,7 @@ def cmd_spam(args):
 def cmd_watch(args):
     w3 = connect(args.rpc)
     contract = Web3.to_checksum_address(args.contract)
-    topic = CLAIMED_TOPIC if CLAIMED_TOPIC.startswith("0x") else "0x" + CLAIMED_TOPIC
+    topic = CLAIMED_TOPIC
     cursor = w3.eth.block_number
     seen = []
     per_team = {1: 0, 2: 0, 3: 0, 4: 0}
@@ -366,8 +367,12 @@ def cmd_watch(args):
                     continue
                 now = time.time()
                 for log in logs:
-                    team = int.from_bytes(log["data"][-1:], "big") or \
-                        int(log["data"].hex()[-2:], 16)
+                    # seul 'team' n'est pas indexe : data = 32 octets, equipe
+                    # dans le dernier. epoch / cell / player sont dans les topics.
+                    data = log["data"]
+                    if isinstance(data, str):
+                        data = bytes.fromhex(data[2:] if data.startswith("0x") else data)
+                    team = data[-1] if data else 0
                     per_team[team] = per_team.get(team, 0) + 1
                     seen.append(now)
                 cursor = to_block
