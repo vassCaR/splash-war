@@ -135,37 +135,45 @@ def send(w3, acct, tx, label):
 
 def calibrate(w3, acct, address, abi):
     """
-    Mesure le cout reel d'une capture et aligne GAS_LIMIT dessus.
+    Mesure le cout reel d'une pose et aligne les constantes de gas dessus.
 
     Sur Monad le gas est facture sur le gas_limit, pas sur le gas_used : chaque
-    millier de gas de marge est paye plein pot par tous les joueurs. On mesure
-    donc le pire cas (case vierge ET joueur vierge, les deux slots passent de
-    zero a non-zero) et on garde 15 % de marge, pas plus.
+    millier de gas de marge est paye plein pot par tous les joueurs. Le front
+    ajuste donc sa limite case par case, selon que le slot vise est deja ecrit
+    ou non. On mesure ici le pire cas (case vierge ET joueur vierge, les deux
+    slots passent de zero a non-zero) et on en deduit la partie fixe.
     """
+    COLD = 22100  # SSTORE d'un slot a zero, tarif EVM
     c = w3.eth.contract(address=address, abi=abi)
     try:
         worst = c.functions.claim(0, 1).estimate_gas({"from": acct.address})
     except Exception as exc:
-        print("calibration impossible (" + str(exc)[:70] + "), GAS_LIMIT inchange")
+        print("calibration impossible (" + str(exc)[:70] + "), constantes inchangees")
         return None
+
+    fixed = worst - 2 * COLD
     limit = ((int(worst * 1.15) // 1000) + 1) * 1000
     base = w3.eth.get_block("latest").get("baseFeePerGas") or w3.eth.gas_price
-    cost = limit * int(base)
-    print(f"calibration : pire cas {worst} gas, GAS_LIMIT retenu {limit}")
-    print(f"              base fee {Web3.from_wei(base, 'gwei'):.0f} gwei -> "
-          f"{Web3.from_wei(cost, 'ether'):.5f} MON par capture, "
-          f"soit {int(1 / float(Web3.from_wei(cost, 'ether')))} captures par MON")
+    cher = Web3.from_wei(limit * int(base), "ether")
+    pas_cher = Web3.from_wei(int((fixed + 2 * 5000) * 1.15) * int(base), "ether")
 
-    for path, pattern, repl in (
-        (FRONT, r"GAS_LIMIT:\s*\d+n", f"GAS_LIMIT: {limit}n"),
+    print(f"calibration : pire cas mesure {worst} gas, partie fixe {fixed}")
+    print(f"              base fee {Web3.from_wei(base, 'gwei'):.0f} gwei")
+    print(f"              case vierge {cher:.5f} MON, repeinture {pas_cher:.5f} MON")
+    print(f"              une reserve de 0.5 MON vaut environ "
+          f"{int(0.5 / float(pas_cher))} repeintures")
+
+    edits = [
+        (FRONT, r"fixed:\s*\d+n", f"fixed: {fixed}n"),
         (os.path.join(ROOT, "bot.py"), r"GAS_LIMIT = [\d_]+", f"GAS_LIMIT = {limit}"),
-    ):
+    ]
+    for path, pattern, repl in edits:
         try:
             txt = open(path).read()
-            new, n = re.subn(pattern, repl, txt, count=1)
+            out, n = re.subn(pattern, repl, txt, count=1)
             if n:
-                open(path, "w").write(new)
-                print(f"              GAS_LIMIT mis a jour dans {os.path.relpath(path, ROOT)}")
+                open(path, "w").write(out)
+                print(f"              {os.path.relpath(path, ROOT)} mis a jour")
         except FileNotFoundError:
             pass
     return limit

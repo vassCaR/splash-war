@@ -4,7 +4,8 @@ bot.py - outillage Territory War : wallets jetables, financement, spam, monitori
 
     python bot.py gen   --n 20
     python bot.py fund  --key <cle_privee_source> --amount 0.05
-    python bot.py spam  --contract 0x... --rate 30 --teams 1,3
+    python bot.py spam   --contract 0x... --rate 30 --colors 4,9
+    python bot.py refill --contract 0x... --amount 0.3
     python bot.py watch --contract 0x...
 
 Specificites Monad prises en compte ici :
@@ -65,7 +66,10 @@ GETLOGS_MAX_RANGE = 100          # plafond du RPC public
 SELECTOR = Web3.keccak(text="claim(uint16,uint8)")[:4]
 _topic = Web3.keccak(text="Claimed(uint32,uint16,address,uint8)").hex()
 CLAIMED_TOPIC = _topic if _topic.startswith("0x") else "0x" + _topic
-TEAM_NAMES = {1: "ACID", 2: "MAGENTA", 3: "CYAN", 4: "AMBER"}
+COLOR_NAMES = ["", "ACID", "LIME", "TEAL", "CYAN", "AZUR", "INDIGO", "VIOLET",
+               "MAUVE", "MAGENTA", "ROSE", "ROUGE", "ORANGE", "AMBRE", "JAUNE",
+               "SABLE", "BLANC"]
+COLORS = 16
 W = H = 32
 
 
@@ -80,8 +84,8 @@ def connect(rpc):
     return w3
 
 
-def claim_data(cell, team):
-    return SELECTOR + cell.to_bytes(32, "big") + team.to_bytes(32, "big")
+def claim_data(cell, color):
+    return SELECTOR + cell.to_bytes(32, "big") + color.to_bytes(32, "big")
 
 
 def raw_of(signed):
@@ -145,27 +149,78 @@ def cmd_gen(args):
 # fund
 # ----------------------------------------------------------------------
 
-def cmd_fund(args):
-    w3 = connect(args.rpc)
-
-    # Le faucet Monad plafonne par adresse : une reserve de plusieurs dizaines de
-    # MON est forcement eclatee sur plusieurs comptes. On accepte donc une liste
-    # de cles sources et on repartit les virements dessus, le plus garni d'abord.
+def funders_from(args, w3):
+    """Comptes sources, tries du plus garni au plus pauvre, avec leurs soldes."""
     raw = args.key or os.environ.get("TW_FUNDER_KEY") or os.environ.get("TW_DEPLOYER_KEY")
     if not raw:
         sys.exit("cle source manquante : --key 0x...[,0x...] ou TW_FUNDER_KEY dans .env")
-    keys = [k.strip() for k in raw.split(",") if k.strip()]
-    funders = [Account.from_key(k) for k in keys]
+    accounts = [Account.from_key(k.strip()) for k in raw.split(",") if k.strip()]
+    balances = {a.address: w3.eth.get_balance(a.address) for a in accounts}
+    accounts.sort(key=lambda a: balances[a.address], reverse=True)
+    return accounts, balances
 
-    balances = {}
-    for f in funders:
-        balances[f.address] = w3.eth.get_balance(f.address)
-    funders.sort(key=lambda f: balances[f.address], reverse=True)
+
+def send_funds(w3, funders, balances, targets, amount_wei, delay=0.05):
+    """
+    Repartit les virements sur les comptes sources, le plus garni d'abord.
+    Le faucet Monad plafonne par adresse : une reserve de plusieurs dizaines de
+    MON est forcement eclatee sur plusieurs comptes.
+    """
+    max_fee, tip = fees(w3)
+    frais = 21_000 * max_fee           # Monad facture le gas_limit, ici 21000 pile
+    unitaire = amount_wei + frais
     reserve = sum(balances.values())
+    if reserve < unitaire * len(targets):
+        sys.exit("reserve insuffisante : il manque "
+                 + fmt_mon(unitaire * len(targets) - reserve))
+
+    plan, i = [], 0
+    for f in funders:
+        part = targets[i:i + int(balances[f.address] // unitaire)]
+        if part:
+            plan.append((f, part))
+            i += len(part)
+        if i >= len(targets):
+            break
+
+    nonces = {f.address: w3.eth.get_transaction_count(f.address, "pending") for f, _ in plan}
+    hashes = []
+    for funder, part in plan:
+        for addr in part:
+            tx = {
+                "to": addr, "value": amount_wei, "gas": 21_000,
+                "maxFeePerGas": max_fee, "maxPriorityFeePerGas": tip,
+                "nonce": nonces[funder.address], "chainId": CHAIN_ID, "type": 2,
+            }
+            try:
+                h = w3.eth.send_raw_transaction(raw_of(funder.sign_transaction(tx)))
+                hashes.append(h)
+                nonces[funder.address] += 1
+                print(f"  -> {addr}  {h.hex()}")
+            except Exception as exc:
+                print(f"  !! {addr}  {str(exc)[:100]}")
+            time.sleep(delay)
+
+    if not hashes:
+        return 0
+    print("attente du dernier recu...")
+    try:
+        w3.eth.wait_for_transaction_receipt(hashes[-1], timeout=90)
+    except Exception as exc:
+        print("recu non confirme : " + str(exc)[:100])
+    pause = BLOCKS_BEFORE_SPEND * 0.5 + 1.0
+    print(f"pause de {pause:.1f}s (execution asynchrone Monad) avant de pouvoir depenser")
+    time.sleep(pause)
+    return len(hashes)
+
+
+def cmd_fund(args):
+    w3 = connect(args.rpc)
+    funders, balances = funders_from(args, w3)
     for f in funders:
         print(f"source  {f.address}  {fmt_mon(balances[f.address])}")
     if len(funders) > 1:
-        print(f"reserve totale {fmt_mon(reserve)}")
+        print(f"reserve totale {fmt_mon(sum(balances.values()))}")
 
     targets = []
     if not args.extra_only:
@@ -183,56 +238,84 @@ def cmd_fund(args):
         if not targets:
             return
 
-    max_fee, tip = fees(w3)
-    frais = 21_000 * max_fee          # Monad facture le gas_limit, ici 21000 pile
-    needed = (amount + frais) * len(targets)
-    print(f"cibles  {len(targets)} x {args.amount} MON = {fmt_mon(needed)} frais compris")
-    if reserve < needed:
-        sys.exit(f"reserve insuffisante : il manque {fmt_mon(needed - reserve)}")
+    print(f"cibles  {len(targets)} x {args.amount} MON")
+    print(f"{send_funds(w3, funders, balances, targets, amount, args.delay)} wallets prets")
 
-    # Repartition : on remplit source par source, dans l'ordre de richesse.
-    plan, i = [], 0
+
+# ----------------------------------------------------------------------
+# refill
+# ----------------------------------------------------------------------
+
+def scan_players(w3, contract, since=None, chunk=GETLOGS_MAX_RANGE):
+    """
+    Adresses ayant pose au moins une case, extraites des logs Claimed.
+    C'est ce qui permet de recharger la salle sans demander son adresse a
+    personne : chaque joueur s'est deja identifie par ses propres transactions.
+    """
+    head = w3.eth.block_number
+    start = since if since is not None else max(0, head - 5000)
+    seen, block = {}, start
+    print(f"lecture des logs, blocs {start} a {head} "
+          f"({(head - start) // chunk + 1} requetes)")
+    while block <= head:
+        to = min(head, block + chunk - 1)
+        try:
+            logs = w3.eth.get_logs({"address": contract, "topics": [CLAIMED_TOPIC],
+                                    "fromBlock": block, "toBlock": to})
+        except Exception as exc:
+            print("  RPC: " + str(exc)[:90])
+            time.sleep(0.5)
+            block = to + 1
+            continue
+        for log in logs:
+            # player est le 3e topic indexe : 32 octets dont les 20 derniers
+            topic = log["topics"][3]
+            topic = topic.hex() if hasattr(topic, "hex") else str(topic)
+            seen_addr = Web3.to_checksum_address("0x" + topic[-40:])
+            seen[seen_addr] = seen.get(seen_addr, 0) + 1
+        block = to + 1
+    return seen
+
+
+def cmd_refill(args):
+    """Recharge les wallets des joueurs reperes dans les logs."""
+    w3 = connect(args.rpc)
+    contract = Web3.to_checksum_address(args.contract)
+    funders, balances = funders_from(args, w3)
     for f in funders:
-        capacite = int(balances[f.address] // (amount + frais))
-        part = targets[i:i + capacite]
-        if part:
-            plan.append((f, part))
-            i += len(part)
-        if i >= len(targets):
-            break
+        print(f"source  {f.address}  {fmt_mon(balances[f.address])}")
 
-    nonces = {f.address: w3.eth.get_transaction_count(f.address, "pending")
-              for f, _ in plan}
-    hashes = []
-    for funder, part in plan:
-        for addr in part:
-            tx = {
-                "to": addr, "value": amount, "gas": 21_000,
-                "maxFeePerGas": max_fee, "maxPriorityFeePerGas": tip,
-                "nonce": nonces[funder.address], "chainId": CHAIN_ID, "type": 2,
-            }
-            try:
-                h = w3.eth.send_raw_transaction(raw_of(funder.sign_transaction(tx)))
-                hashes.append(h)
-                nonces[funder.address] += 1
-                print(f"  -> {addr}  {h.hex()}")
-            except Exception as exc:
-                print(f"  !! {addr}  {str(exc)[:100]}")
-            time.sleep(args.delay)
+    since = args.since
+    if since is None and os.path.exists("deployment.json"):
+        try:
+            since = json.load(open("deployment.json")).get("block")
+        except Exception:
+            pass
 
-    if not hashes:
+    players = scan_players(w3, contract, since)
+    if not players:
+        print("aucun joueur repere dans cette fenetre de blocs")
         return
-    print("attente du dernier recu...")
-    try:
-        w3.eth.wait_for_transaction_receipt(hashes[-1], timeout=90)
-    except Exception as exc:
-        print("recu non confirme : " + str(exc)[:100])
+    print(f"{len(players)} joueurs reperes")
 
-    # Execution asynchrone : le solde n'est pas depensable avant ~3 blocs.
-    pause = BLOCKS_BEFORE_SPEND * 0.5 + 1.0
-    print(f"pause de {pause:.1f}s (execution asynchrone Monad) avant de pouvoir depenser")
-    time.sleep(pause)
-    print(f"{len(hashes)} wallets prets")
+    seuil = Web3.to_wei(args.min, "ether")
+    amount = Web3.to_wei(args.amount, "ether")
+    a_sec = []
+    for addr, poses in sorted(players.items(), key=lambda kv: -kv[1]):
+        solde = w3.eth.get_balance(addr)
+        if solde < seuil:
+            a_sec.append(addr)
+            print(f"  {addr}  {fmt_mon(solde):>12}  {poses:4d} poses  -> recharge")
+    if not a_sec:
+        print("personne sous le seuil, rien a faire")
+        return
+
+    print(f"{len(a_sec)} wallets a recharger de {args.amount} MON")
+    if args.dry_run:
+        print("--dry-run : rien n'a ete envoye")
+        return
+    print(f"{send_funds(w3, funders, balances, a_sec, amount, args.delay)} wallets recharges")
+
 
 
 # ----------------------------------------------------------------------
@@ -252,12 +335,12 @@ class Sender:
         self.failed = 0
         self.dead = False
 
-    def fire(self, cell, team, max_fee, tip):
+    def fire(self, cell, color, max_fee, tip):
         with self.lock:
             nonce = self.nonce
             self.nonce += 1
         tx = {
-            "to": self.contract, "data": claim_data(cell, team), "value": 0,
+            "to": self.contract, "data": claim_data(cell, color), "value": 0,
             "gas": GAS_LIMIT, "maxFeePerGas": max_fee, "maxPriorityFeePerGas": tip,
             "nonce": nonce, "chainId": CHAIN_ID, "type": 2,
         }
@@ -283,9 +366,9 @@ class Sender:
 def cmd_spam(args):
     w3 = connect(args.rpc)
     contract = Web3.to_checksum_address(args.contract)
-    teams = [int(t) for t in args.teams.split(",") if t.strip()]
-    if not teams or any(t < 1 or t > 4 for t in teams):
-        sys.exit("--teams attend des valeurs entre 1 et 4, ex: 1,3")
+    colors = [int(t) for t in args.colors.split(",") if t.strip()]
+    if not colors or any(c < 1 or c > COLORS for c in colors):
+        sys.exit(f"--colors attend des valeurs entre 1 et {COLORS}, ex: 4,9")
 
     if args.region:
         x0, y0, x1, y1 = (int(v) for v in args.region.split(","))
@@ -294,7 +377,8 @@ def cmd_spam(args):
     else:
         x0, y0, x1, y1 = 0, 0, W - 1, H - 1
     cells = [y * W + x for y in range(y0, y1 + 1) for x in range(x0, x1 + 1)]
-    print(f"zone {x0},{y0} -> {x1},{y1} ({len(cells)} cases), equipes {teams}")
+    print(f"zone {x0},{y0} -> {x1},{y1} ({len(cells)} cases), couleurs "
+          + ", ".join(COLOR_NAMES[c] for c in colors))
 
     wallets = load_wallets()
     senders, vides = [], 0
@@ -352,8 +436,8 @@ def cmd_spam(args):
     next_t = time.time()
     i = 0
 
-    def shoot(sender, cell, team):
-        err = sender.fire(cell, team, state["max_fee"], state["tip"])
+    def shoot(sender, cell, color):
+        err = sender.fire(cell, color, state["max_fee"], state["tip"])
         if err:
             state["last_err"] = err
 
@@ -367,7 +451,7 @@ def cmd_spam(args):
                 print("\ntous les wallets sont vides, arret")
                 break
             pool.submit(shoot, alive[i % len(alive)],
-                        random.choice(cells), random.choice(teams))
+                        random.choice(cells), random.choice(colors))
             i += 1
             next_t += interval
     except KeyboardInterrupt:
@@ -390,7 +474,7 @@ def cmd_watch(args):
     topic = CLAIMED_TOPIC
     cursor = w3.eth.block_number
     seen = []
-    per_team = {1: 0, 2: 0, 3: 0, 4: 0}
+    per_color = {}
     t0 = time.time()
     print(f"ecoute de {contract} a partir du bloc {cursor}. Ctrl-C pour arreter.")
 
@@ -411,21 +495,22 @@ def cmd_watch(args):
                     continue
                 now = time.time()
                 for log in logs:
-                    # seul 'team' n'est pas indexe : data = 32 octets, equipe
-                    # dans le dernier. epoch / cell / player sont dans les topics.
+                    # seule 'color' n'est pas indexee : data = 32 octets, la
+                    # couleur dans le dernier. Le reste est dans les topics.
                     data = log["data"]
                     if isinstance(data, str):
                         data = bytes.fromhex(data[2:] if data.startswith("0x") else data)
-                    team = data[-1] if data else 0
-                    per_team[team] = per_team.get(team, 0) + 1
+                    color = data[-1] if data else 0
+                    per_color[color] = per_color.get(color, 0) + 1
                     seen.append(now)
                 cursor = to_block
 
             seen = [t for t in seen if time.time() - t < 10]
             tps = len(seen) / 10
-            total = sum(per_team.values())
+            total = sum(per_color.values())
+            top = sorted(per_color.items(), key=lambda kv: -kv[1])[:4]
             repartition = "  ".join(
-                f"{TEAM_NAMES.get(t, t)} {per_team.get(t, 0)}" for t in (1, 2, 3, 4))
+                f"{COLOR_NAMES[c] if c < len(COLOR_NAMES) else c} {n}" for c, n in top)
             sys.stdout.write(
                 f"\r{time.time()-t0:6.0f}s  bloc {cursor}  {tps:5.1f} tx/s  "
                 f"total {total:6d}   {repartition}".ljust(130))
@@ -462,11 +547,23 @@ def main():
     s = sub.add_parser("spam", help="envoie des captures en continu")
     s.add_argument("--contract", required=True)
     s.add_argument("--rate", type=float, default=30, help="transactions par seconde")
-    s.add_argument("--teams", default="1,2,3,4")
+    s.add_argument("--colors", default="1,4,9,13",
+                   help=f"indices 1..{COLORS} separes par des virgules")
     s.add_argument("--region", help="x0,y0,x1,y1")
     s.add_argument("--duration", type=float, help="secondes, sinon jusqu'a Ctrl-C")
     s.add_argument("--fee-mult", type=int, default=2)
     s.set_defaults(func=cmd_spam)
+
+    r = sub.add_parser("refill", help="recharge les joueurs reperes dans les logs")
+    r.add_argument("--contract", required=True)
+    r.add_argument("--key", help="cle(s) privee(s) source (ou TW_FUNDER_KEY dans .env)")
+    r.add_argument("--min", type=float, default=0.08,
+                   help="seuil de recharge en MON (defaut 0.08, environ 18 repeintures)")
+    r.add_argument("--amount", type=float, default=0.3)
+    r.add_argument("--since", type=int, help="bloc de depart (defaut: deployment.json)")
+    r.add_argument("--dry-run", action="store_true")
+    r.add_argument("--delay", type=float, default=0.05)
+    r.set_defaults(func=cmd_refill)
 
     w = sub.add_parser("watch", help="compteur tx/s en direct")
     w.add_argument("--contract", required=True)

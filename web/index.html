@@ -15,10 +15,10 @@
     --line:#1c202e;
     --ink:#e8ecf5;
     --dim:#6b7488;
-    --t1:#b8ff29;
-    --t2:#ff2d78;
-    --t3:#29e6ff;
-    --t4:#ffae29;
+    --acid:#b8ff29;
+    --pink:#ff2d78;
+    --cyan:#29e6ff;
+    --amber:#ffae29;
     --empty:#12151f;
   }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -30,7 +30,7 @@
     overflow:hidden;
     -webkit-font-smoothing:antialiased;
   }
-  /* atmosphere : halo radial + grain + scanlines */
+  /* atmosphere : halo radial + scanlines */
   body::before{
     content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     background:
@@ -42,69 +42,85 @@
     background:repeating-linear-gradient(to bottom,rgba(255,255,255,.022) 0 1px,transparent 1px 3px);
     mix-blend-mode:overlay;
   }
-  .app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:1fr 340px;gap:0}
+  .app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:1fr 340px}
   .app.solo{grid-template-columns:1fr}
 
-  /* ---------- colonne gauche : plateau ---------- */
-  .stage{display:flex;flex-direction:column;min-width:0;padding:22px 26px}
+  /* ---------- colonne gauche : plateau + palette ---------- */
+  .stage{display:flex;flex-direction:column;min-width:0;padding:20px 26px 16px}
   .brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
   .brand h1{
     font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:30px;
     letter-spacing:.14em;text-transform:uppercase;
-    background:linear-gradient(92deg,var(--t1),var(--t3) 55%,var(--t2));
+    background:linear-gradient(92deg,var(--acid),var(--cyan) 55%,var(--pink));
     -webkit-background-clip:text;background-clip:text;color:transparent;
   }
   .brand .sub{color:var(--dim);font-size:11px;letter-spacing:.24em;text-transform:uppercase}
-  .metrics{display:flex;gap:26px;margin:16px 0 14px;align-items:flex-end;flex-wrap:wrap}
+  .metrics{display:flex;gap:26px;margin:14px 0 12px;align-items:flex-end;flex-wrap:wrap}
   .metric .k{font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-  .metric .v{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:.02em}
+  .metric .v{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:32px;line-height:1}
   .metric .v small{font-size:13px;color:var(--dim);font-weight:500;margin-left:4px}
-  #tps .v{color:var(--t1);text-shadow:0 0 22px rgba(184,255,41,.45)}
-  .boardwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
+  #tps .v{color:var(--acid);text-shadow:0 0 22px rgba(184,255,41,.45)}
+  .boardwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
   canvas{
     image-rendering:pixelated;border:1px solid var(--line);
     box-shadow:0 0 0 1px rgba(255,255,255,.03), 0 30px 90px rgba(0,0,0,.7);
     cursor:crosshair;touch-action:none;
   }
-  .hint{position:absolute;bottom:-4px;left:0;font-size:11px;color:var(--dim);letter-spacing:.06em}
+
+  /* ---------- palette sous le plateau ---------- */
+  .palette{margin-top:14px;display:flex;flex-direction:column;gap:7px;align-items:center}
+  .swatches{display:grid;grid-template-columns:repeat(16,1fr);gap:5px;width:100%;max-width:560px}
+  .sw{
+    aspect-ratio:1;border:1px solid rgba(255,255,255,.10);cursor:pointer;position:relative;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .sw:hover{transform:translateY(-3px)}
+  .sw.on{
+    border-color:var(--ink);transform:translateY(-4px);
+    box-shadow:0 0 0 2px var(--bg), 0 0 0 3px currentColor, 0 6px 20px -6px currentColor;
+  }
+  .palrow{
+    display:flex;justify-content:space-between;align-items:center;width:100%;max-width:560px;
+    font-size:11px;color:var(--dim);letter-spacing:.06em
+  }
+  .palrow b{font-family:'Chakra Petch',sans-serif;letter-spacing:.14em;font-weight:600}
+  @media (max-width:1100px){ .swatches{grid-template-columns:repeat(8,1fr)} }
 
   /* ---------- colonne droite ---------- */
   .side{
     background:var(--panel);border-left:1px solid var(--line);
-    padding:22px 20px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;
+    padding:20px;display:flex;flex-direction:column;gap:18px;overflow-y:auto;
   }
   .block h2{
     font-family:'Chakra Petch',sans-serif;font-size:11px;font-weight:600;letter-spacing:.24em;
     text-transform:uppercase;color:var(--dim);margin-bottom:10px;
     display:flex;justify-content:space-between;align-items:center;
   }
-  .teams{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .team{
-    border:1px solid var(--line);background:#0a0c13;padding:11px 12px;cursor:pointer;
-    display:flex;align-items:center;gap:9px;transition:.15s;
-    font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
-  }
-  .team .dot{width:11px;height:11px;flex:none}
-  .team:hover{border-color:#333a4d}
-  .team.on{border-color:currentColor;box-shadow:inset 0 0 26px -12px currentColor}
-  .scores{display:flex;flex-direction:column;gap:7px}
-  .row{display:grid;grid-template-columns:62px 1fr 46px;align-items:center;gap:9px;font-size:12px}
-  .bar{height:7px;background:#12151f;overflow:hidden}
-  .bar i{display:block;height:100%;width:0;transition:width .35s cubic-bezier(.2,.8,.2,1)}
+  .stack{display:flex;height:10px;width:100%;background:#12151f;overflow:hidden;margin-bottom:11px}
+  .stack i{display:block;height:100%;transition:width .4s cubic-bezier(.2,.8,.2,1)}
+  .scores{display:flex;flex-direction:column;gap:6px}
+  .row{display:grid;grid-template-columns:12px 1fr 44px;align-items:center;gap:9px;font-size:11.5px}
+  .row.me{background:rgba(41,230,255,.07);outline:1px solid rgba(41,230,255,.25);outline-offset:2px}
+  .rk{color:var(--dim);font-variant-numeric:tabular-nums}
+  .chip{width:10px;height:10px}
   .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
   .kv{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:4px 0;border-bottom:1px dashed #171b27}
   .kv span:first-child{color:var(--dim)}
   .kv span:last-child{font-variant-numeric:tabular-nums;word-break:break-all;text-align:right}
   .mono-addr{font-size:10.5px}
-  button.act{
-    width:100%;padding:10px;background:transparent;color:var(--ink);border:1px solid var(--line);
-    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:.15s
+  .fuel{height:6px;background:#12151f;margin-top:9px;overflow:hidden}
+  .fuel i{display:block;height:100%;background:var(--acid);transition:width .3s}
+  button.act, a.act{
+    display:block;width:100%;padding:10px;background:transparent;color:var(--ink);
+    border:1px solid var(--line);text-align:center;text-decoration:none;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;cursor:pointer;transition:.15s
   }
-  button.act:hover{border-color:var(--t3);color:var(--t3)}
-  a.act{display:block;text-align:center;text-decoration:none}
-  .warn{border:1px solid #3a2a12;background:#140f06;color:var(--t4);padding:9px 11px;font-size:11px;line-height:1.5}
-  .ok{color:var(--t1)}
-  .err{color:var(--t2)}
+  button.act:hover, a.act:hover{border-color:var(--cyan);color:var(--cyan)}
+  .warn{border:1px solid #3a2a12;background:#140f06;color:var(--amber);padding:9px 11px;font-size:11px;line-height:1.5}
+  .warn.err{border-color:#3a1220;background:#14060b;color:var(--pink)}
+  .ok{color:var(--acid)}
+  .err{color:var(--pink)}
   input.cfg{
     width:100%;background:#07080c;border:1px solid var(--line);color:var(--ink);
     padding:8px 9px;font-family:'IBM Plex Mono',monospace;font-size:11px
@@ -114,7 +130,8 @@
     .app{grid-template-columns:1fr;grid-template-rows:1fr auto;overflow-y:auto}
     .side{border-left:none;border-top:1px solid var(--line)}
     .brand h1{font-size:22px}
-    .metric .v{font-size:26px}
+    .metric .v{font-size:24px}
+    .metrics{gap:18px}
   }
 </style>
 </head>
@@ -124,51 +141,62 @@
   <section class="stage">
     <div class="brand">
       <h1>Territory War</h1>
-      <span class="sub">1 clic = 1 transaction · monad testnet</span>
+      <span class="sub">1 case = 1 transaction &middot; monad testnet</span>
     </div>
 
     <div class="metrics">
       <div class="metric" id="tps"><div class="k">Transactions / sec</div><div class="v">0.0</div></div>
-      <div class="metric"><div class="k">Captures (manche)</div><div class="v" id="mTotal">0</div></div>
-      <div class="metric"><div class="k">Cases prises</div><div class="v" id="mFill">0<small>/1024</small></div></div>
-      <div class="metric"><div class="k">Bloc</div><div class="v" id="mBlock">—</div></div>
+      <div class="metric"><div class="k">Poses (manche)</div><div class="v" id="mTotal">0</div></div>
+      <div class="metric"><div class="k">Cases peintes</div><div class="v" id="mFill">0<small>/1024</small></div></div>
+      <div class="metric"><div class="k">Bloc</div><div class="v" id="mBlock">&mdash;</div></div>
     </div>
 
-    <div class="boardwrap">
-      <canvas id="board"></canvas>
-      <div class="hint" id="hint">Choisis une equipe a droite, puis clique (ou glisse) sur la grille.</div>
+    <div class="boardwrap"><canvas id="board"></canvas></div>
+
+    <div class="palette" id="palette">
+      <div class="swatches" id="swatches"></div>
+      <div class="palrow">
+        <span>Clique ou glisse sur la grille</span>
+        <b id="curName">&mdash;</b>
+      </div>
     </div>
   </section>
 
   <aside class="side" id="side">
     <div class="block">
-      <h2>Equipe</h2>
-      <div class="teams" id="teams"></div>
-    </div>
-
-    <div class="block">
-      <h2>Score <span id="leader"></span></h2>
+      <h2>Classement des couleurs</h2>
+      <div class="stack" id="stack"></div>
       <div class="scores" id="scores"></div>
     </div>
 
     <div class="block">
+      <h2>Territoire tenu <span id="myRank"></span></h2>
+      <div class="scores" id="holders"></div>
+      <p class="foot" style="margin-top:9px">Ce qui compte n'est pas ce que tu as pose,
+      c'est ce que tu tiens encore quand la manche se termine.</p>
+    </div>
+
+    <div class="block">
       <h2>Ton wallet jetable</h2>
-      <div class="kv"><span>Adresse</span><span class="mono-addr" id="wAddr">—</span></div>
-      <div class="kv"><span>Solde</span><span id="wBal">—</span></div>
-      <div class="kv"><span>Tx envoyees</span><span id="wSent">0</span></div>
+      <div class="kv"><span>Adresse</span><span class="mono-addr" id="wAddr">&mdash;</span></div>
+      <div class="kv"><span>Solde</span><span id="wBal">&mdash;</span></div>
+      <div class="kv"><span>Cases posees</span><span id="wSent">0</span></div>
       <div class="kv"><span>Echecs</span><span id="wErr">0</span></div>
+      <div class="fuel"><i id="fuel" style="width:0"></i></div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
         <a class="act" id="faucet" href="https://faucet.monad.xyz" target="_blank" rel="noopener">Recuperer du MON</a>
-        <button class="act" id="btnCopy">Copier la cle privee</button>
+        <button class="act" id="btnCopyAddr">Copier mon adresse</button>
+        <button class="act" id="btnCopyKey">Copier la cle privee</button>
       </div>
-      <p class="foot" style="margin-top:9px">Cle generee dans ce navigateur, stockee en localStorage. Testnet uniquement, n'y mets rien de reel.</p>
+      <p class="foot" style="margin-top:9px">Cle generee dans ce navigateur, stockee en localStorage. Testnet uniquement.</p>
     </div>
 
     <div class="block">
       <h2>Reseau</h2>
-      <div class="kv"><span>Contrat</span><span class="mono-addr" id="cAddr">—</span></div>
-      <div class="kv"><span>Manche</span><span id="cEpoch">—</span></div>
-      <div class="kv"><span>RPC</span><span class="mono-addr" id="cRpc">—</span></div>
+      <div class="kv"><span>Contrat</span><span class="mono-addr" id="cAddr">&mdash;</span></div>
+      <div class="kv"><span>Manche</span><span id="cEpoch">&mdash;</span></div>
+      <div class="kv"><span>RPC</span><span class="mono-addr" id="cRpc">&mdash;</span></div>
+      <div class="kv"><span>Cout par case</span><span id="cCost">&mdash;</span></div>
       <div id="netStatus" style="margin-top:10px"></div>
     </div>
 
@@ -184,19 +212,28 @@
 
 <script>
 /* =====================================================================
-   CONFIG - remplis CONTRACT apres le deploiement (ou via ?contract=0x...)
+   CONFIG - remplie automatiquement par scripts/deploy.py
    ===================================================================== */
 const DEFAULTS = {
-  CONTRACT: "",                                  // <-- colle l'adresse ici
+  CONTRACT: "",                                  // <-- injecte au deploiement
   RPC:      "https://testnet-rpc.monad.xyz",     // alt: https://rpc.ankr.com/monad_testnet
   CHAIN_ID: 10143,
   EXPLORER: "https://testnet.monadscan.com",
   POLL_MS:  800,        // frequence de lecture des logs
   RESYNC_EVERY: 25,     // relecture complete du plateau tous les N polls
   MAX_LOG_RANGE: 90,    // eth_getLogs est plafonne a 100 blocs sur le RPC public
-  // Monad facture le gas_limit, pas le gas_used : toute marge est payee plein pot.
-  // Une capture consomme ~35k en repeinture, ~68k sur une case vierge.
-  GAS_LIMIT: 90000n
+  MAX_INFLIGHT: 3,      // requetes d'envoi simultanees, pour ne pas noyer le RPC
+
+  // Monad facture le gas_limit, PAS le gas_used : toute marge est payee plein
+  // pot, par tout le monde. On ajuste donc la limite a ce que la case va
+  // reellement couter, en s'appuyant sur ce que le front sait deja du plateau.
+  // Recalibre par scripts/deploy.py sur une mesure eth_estimateGas reelle.
+  GAS: {
+    fixed: 26000n,      // intrinseque + calldata + evenement + logique
+    cold:  22100n,      // SSTORE d'un slot encore a zero
+    warm:   5000n,      // SSTORE d'un slot deja non nul
+    margin:   115n      // pourcentage de marge
+  }
 };
 
 const qs = new URLSearchParams(location.search);
@@ -213,36 +250,125 @@ const CFG = {
 const SPECTATE = qs.has("spectate");
 
 const W = 32, H = 32, CELLS = W * H;
-const TEAMS = [
-  { id:1, name:"ACID",    css:"--t1", hex:"#b8ff29" },
-  { id:2, name:"MAGENTA", css:"--t2", hex:"#ff2d78" },
-  { id:3, name:"CYAN",    css:"--t3", hex:"#29e6ff" },
-  { id:4, name:"AMBER",   css:"--t4", hex:"#ffae29" }
+
+/* La palette n'est pas onchain : le contrat ne stocke qu'un indice de 1 a 16.
+   Changer ces teintes ne demande aucun redeploiement. */
+const PALETTE = [
+  { id:1,  name:"ACID",   hex:"#b8ff29" },
+  { id:2,  name:"LIME",   hex:"#2fd96b" },
+  { id:3,  name:"TEAL",   hex:"#12b5a5" },
+  { id:4,  name:"CYAN",   hex:"#29e6ff" },
+  { id:5,  name:"AZUR",   hex:"#2b6bff" },
+  { id:6,  name:"INDIGO", hex:"#5a3cff" },
+  { id:7,  name:"VIOLET", hex:"#9b5cff" },
+  { id:8,  name:"MAUVE",  hex:"#d46bff" },
+  { id:9,  name:"MAGENTA",hex:"#ff2d78" },
+  { id:10, name:"ROSE",   hex:"#ff8ad4" },
+  { id:11, name:"ROUGE",  hex:"#ff3b30" },
+  { id:12, name:"ORANGE", hex:"#ff7a1a" },
+  { id:13, name:"AMBRE",  hex:"#ffae29" },
+  { id:14, name:"JAUNE",  hex:"#ffe629" },
+  { id:15, name:"SABLE",  hex:"#d9c9a3" },
+  { id:16, name:"BLANC",  hex:"#ffffff" }
 ];
+const COLOR_HEX = ["#12151f", ...PALETTE.map(c => c.hex)];
 const EMPTY_HEX = "#12151f";
+const ZERO = "0x0000000000000000000000000000000000000000";
 
 const ABI = [
-  "function claim(uint16 cell, uint8 team) external",
-  "function getTeams() view returns (uint8[])",
+  "function claim(uint16 cell, uint8 color) external",
+  "function getColors() view returns (uint8[])",
+  "function getOwners() view returns (address[])",
+  "function claimsOf(address player) view returns (uint32)",
   "function epoch() view returns (uint32)",
-  "event Claimed(uint32 indexed epoch, uint16 indexed cell, address indexed player, uint8 team)"
+  "event Claimed(uint32 indexed epoch, uint16 indexed cell, address indexed player, uint8 color)"
 ];
 
 /* ------------------------- etat local ------------------------- */
-const board  = new Uint8Array(CELLS);   // 0 = vide, 1..4 = equipe
-const flash  = new Float64Array(CELLS); // timestamp de la derniere capture (effet visuel)
-let epoch = 0, totalClaims = 0, myTeam = Number(store.get("tw.team", "1"));
+const board  = new Uint8Array(CELLS);   // 0 = vide, 1..16 = couleur
+const flash  = new Float64Array(CELLS); // timestamp de la derniere pose
+let epoch = 0, totalClaims = 0;
+let myColor = Number(store.get("tw.color", "4")) || 4;
 let sent = 0, failed = 0;
 let recent = [];                        // timestamps pour le compteur tx/s
 let provider, wallet, iface, claimedTopic;
 let nextNonce = 0, fee = null, cursor = 0, pollCount = 0, rpcFails = 0;
 let dirty = true;
 
+/* Proprietaire de chaque case, relu periodiquement pour le classement.
+   Volontairement separe du flux de couleurs : c'est une reponse de 32 Ko,
+   on ne la demande pas a chaque tour de boucle. */
+let owners = new Array(CELLS).fill(null);
+
+/* Le slot du joueur est-il deja ecrit ? Determine si sa mise a jour coute
+   un SSTORE a froid (22100) ou a chaud (5000). Lu une fois au demarrage. */
+let playerSlotWarm = false;
+
+/* Solde suivi localement : le rafraichir par RPC toutes les 8 s ne suffit pas
+   quand on pose 10 cases par seconde. On decremente a chaque envoi et on se
+   recale sur la chaine periodiquement. */
+let balanceWei = 0n, balanceKnown = false;
+
+/* File d'envoi : le glisse n'est pas bride, mais on ne laisse pas 40 requetes
+   partir en parallele vers le RPC. */
+const queue = [];
+let inflight = 0, queuePaused = false;
+
 /* ------------------------- helpers ---------------------------- */
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const short = a => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
-function status(html, cls="") { $("netStatus").innerHTML = html ? `<div class="warn ${cls}">${html}</div>` : ""; }
+function status(html, cls = "") {
+  $("netStatus").innerHTML = html ? `<div class="warn ${cls}">${html}</div>` : "";
+}
+
+/* ------------------------- gas -------------------------------- */
+/**
+ * Limite de gas pour une case donnee.
+ * Une case deja peinte dans la manche en cours a forcement son slot non nul :
+ * son SSTORE coutera le tarif a chaud. Une case qui parait vide peut avoir un
+ * slot perime d'une manche precedente (donc non nul, donc moins cher), mais on
+ * prend le tarif a froid par prudence : se tromper dans ce sens coute un peu
+ * de marge, se tromper dans l'autre ferait echouer la transaction en la
+ * facturant quand meme.
+ */
+function gasFor(cell) {
+  const G = CFG.GAS;
+  const cellSlot = board[cell] !== 0 ? G.warm : G.cold;
+  const playerSlot = playerSlotWarm ? G.warm : G.cold;
+  return (G.fixed + cellSlot + playerSlot) * G.margin / 100n;
+}
+
+/** Pire cas : case jamais peinte. Sert a annoncer un nombre de cases restantes
+    qui ne surestime jamais ce que le joueur pourra reellement poser. */
+function gasWorst() {
+  const G = CFG.GAS;
+  return (G.fixed + G.cold + (playerSlotWarm ? G.warm : G.cold)) * G.margin / 100n;
+}
+
+/** Cout reel attendu d'une pose : c'est le prix effectif qui est debite, pas maxFeePerGas. */
+function costOf(gas) { return fee ? gas * fee.effective : 0n; }
+
+/* ------------------------- evenement de pose ------------------------
+   Chaque case peinte emet un evenement "tw:paint" sur window. C'est le point
+   d'accroche du retour sonore : rien dans le rendu ni dans l'envoi n'a besoin
+   d'etre modifie pour brancher du son.
+
+     addEventListener("tw:paint", e => {
+       const { cell, color, x, y, mine } = e.detail;
+       // mine === true  -> c'est toi qui viens de poser, aucun aller-retour chaine
+       // mine === false -> quelqu'un d'autre, remonte par les logs
+     });
+
+   Les poses distantes arrivent par paquets a chaque tour de polling : penser
+   a limiter la polyphonie si le plateau s'emballe. */
+function notifyPaint(cell, color, mine) {
+  try {
+    dispatchEvent(new CustomEvent("tw:paint", {
+      detail: { cell, color, mine, x: cell % W, y: (cell / W) | 0 }
+    }));
+  } catch {}
+}
 
 /* ------------------------- rendu ------------------------------ */
 const cv = $("board"), ctx = cv.getContext("2d");
@@ -269,11 +395,10 @@ function draw() {
     let live = false;
     for (let i = 0; i < CELLS; i++) {
       const x = (i % W) * px, y = ((i / W) | 0) * px;
-      const t = board[i];
-      ctx.fillStyle = t ? TEAMS[t - 1].hex : EMPTY_HEX;
+      ctx.fillStyle = COLOR_HEX[board[i]] || EMPTY_HEX;
       ctx.fillRect(x + 1, y + 1, px - 2, px - 2);
       const age = now - flash[i];
-      if (age < 700) {                       // halo decroissant sur les captures fraiches
+      if (age < 700) {                       // halo decroissant sur les poses fraiches
         live = true;
         ctx.globalAlpha = 1 - age / 700;
         ctx.fillStyle = "#ffffff";
@@ -287,18 +412,32 @@ function draw() {
 }
 
 function paintUI() {
-  const counts = [0, 0, 0, 0, 0];
+  const counts = new Array(17).fill(0);
   let filled = 0;
-  for (let i = 0; i < CELLS; i++) { const t = board[i]; if (t) { counts[t]++; filled++; } }
-  const max = Math.max(1, ...counts.slice(1));
-  $("scores").innerHTML = TEAMS.map(t => `
+  for (let i = 0; i < CELLS; i++) { const c = board[i]; if (c) { counts[c]++; filled++; } }
+
+  // barre empilee : la repartition complete des 16 couleurs, lisible au projecteur
+  $("stack").innerHTML = filled
+    ? PALETTE.filter(c => counts[c.id])
+        .map(c => `<i style="background:${c.hex};width:${counts[c.id] / filled * 100}%"></i>`).join("")
+    : "";
+
+  // classement : on ne detaille que le haut du tableau, 16 lignes seraient illisibles
+  const top = PALETTE.filter(c => counts[c.id]).sort((a, b) => counts[b.id] - counts[a.id]);
+  const shown = top.slice(0, 6);
+  const rest = top.slice(6).reduce((s, c) => s + counts[c.id], 0);
+  $("scores").innerHTML = shown.map(c => `
     <div class="row">
-      <span style="color:${t.hex}">${t.name}</span>
-      <span class="bar"><i style="background:${t.hex};width:${(counts[t.id] / max * 100).toFixed(1)}%"></i></span>
-      <span class="num">${counts[t.id]}</span>
-    </div>`).join("");
-  const best = counts.indexOf(Math.max(...counts.slice(1)), 1);
-  $("leader").innerHTML = filled ? `<span style="color:${TEAMS[best-1].hex}">${TEAMS[best-1].name}</span>` : "";
+      <span class="chip" style="background:${c.hex}"></span>
+      <span style="color:${c.hex}">${c.name}</span>
+      <span class="num">${counts[c.id]}</span>
+    </div>`).join("") + (rest ? `
+    <div class="row">
+      <span class="chip" style="background:#2a3142"></span>
+      <span style="color:var(--dim)">${top.length - 6} autres</span>
+      <span class="num">${rest}</span>
+    </div>` : "");
+
   $("mFill").innerHTML = filled + "<small>/1024</small>";
   $("mTotal").textContent = totalClaims;
   $("cEpoch").textContent = epoch || "—";
@@ -307,17 +446,67 @@ function paintUI() {
   const now = Date.now();
   recent = recent.filter(t => now - t < 10000);
   $("tps").querySelector(".v").textContent = (recent.length / 10).toFixed(1);
+  paintFuel();
 }
 
-/* ------------------------- equipes ---------------------------- */
-function renderTeams() {
-  $("teams").innerHTML = TEAMS.map(t => `
-    <div class="team ${t.id === myTeam ? "on" : ""}" data-t="${t.id}" style="color:${t.hex}">
-      <span class="dot" style="background:${t.hex}"></span>${t.name}
-    </div>`).join("");
-  $("teams").querySelectorAll(".team").forEach(el => el.onclick = () => {
-    myTeam = Number(el.dataset.t); store.set("tw.team", myTeam); renderTeams();
+/** Classement par territoire detenu. Le tri se fait entierement cote front a
+    partir de getOwners() : aucun compteur onchain, donc aucune ecriture
+    supplementaire dans le chemin chaud du claim. */
+function paintHolders() {
+  const tally = new Map();
+  for (let i = 0; i < CELLS; i++) {
+    const a = owners[i];
+    if (a && a !== ZERO) tally.set(a, (tally.get(a) || 0) + 1);
+  }
+  const me = wallet ? wallet.address.toLowerCase() : "";
+  const rows = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+  const mine = rows.findIndex(r => r[0].toLowerCase() === me);
+
+  const top = rows.slice(0, 6);
+  // Si le joueur n'est pas dans le haut du tableau, on l'ajoute quand meme.
+  if (mine >= 6) top.push(rows[mine]);
+
+  $("holders").innerHTML = top.length ? top.map(([addr, n]) => {
+    const isMe = addr.toLowerCase() === me;
+    const rank = rows.findIndex(r => r[0] === addr) + 1;
+    return `<div class="row ${isMe ? "me" : ""}">
+      <span class="rk">${rank}</span>
+      <span class="mono-addr" style="color:${isMe ? "var(--cyan)" : "var(--ink)"}">
+        ${isMe ? "toi" : short(addr)}</span>
+      <span class="num">${n}</span>
+    </div>`;
+  }).join("") : `<div class="foot">Personne ne tient encore de territoire.</div>`;
+
+  $("myRank").innerHTML = mine >= 0
+    ? `<span style="color:var(--cyan)">${mine + 1}<span style="color:var(--dim)">/${rows.length}</span></span>`
+    : "";
+}
+
+/** Le solde n'interesse personne en MON : ce qui compte, c'est combien de cases il reste. */
+function paintFuel() {
+  if (!balanceKnown || !fee) return;
+  const unit = costOf(gasWorst());
+  const left = unit > 0n ? Number(balanceWei / unit) : 0;
+  const mon = Number(ethers.formatEther(balanceWei));
+  $("wBal").innerHTML = left > 0
+    ? `<span class="${left > 8 ? "ok" : "err"}">${mon.toFixed(4)} MON</span>` +
+      ` <span style="color:var(--dim)">~${left} cases</span>`
+    : `<span class="err">${mon.toFixed(4)} MON — vide</span>`;
+  $("fuel").style.width = Math.min(100, left / 60 * 100) + "%";
+  $("fuel").style.background = left > 8 ? "var(--acid)" : "var(--pink)";
+  $("cCost").textContent = (Number(ethers.formatEther(unit)) || 0).toFixed(4) + " MON";
+}
+
+/* ------------------------- palette ---------------------------- */
+function renderPalette() {
+  $("swatches").innerHTML = PALETTE.map(c => `
+    <div class="sw ${c.id === myColor ? "on" : ""}" data-c="${c.id}"
+         style="background:${c.hex};color:${c.hex}" title="${c.name}"></div>`).join("");
+  $("swatches").querySelectorAll(".sw").forEach(el => el.onclick = () => {
+    myColor = Number(el.dataset.c); store.set("tw.color", myColor); renderPalette();
   });
+  const cur = PALETTE.find(c => c.id === myColor);
+  $("curName").innerHTML = cur ? `<span style="color:${cur.hex}">${cur.name}</span>` : "";
 }
 
 /* ------------------------- chaine ----------------------------- */
@@ -331,7 +520,7 @@ async function initChain() {
   wallet = new ethers.Wallet(pk, provider);
 
   $("wAddr").innerHTML = `<a href="${CFG.EXPLORER}/address/${wallet.address}" target="_blank"
-      rel="noopener" style="color:var(--t3);text-decoration:none">${short(wallet.address)}</a>`;
+      rel="noopener" style="color:var(--cyan);text-decoration:none">${short(wallet.address)}</a>`;
   $("wAddr").title = wallet.address;
   $("cAddr").textContent = short(CFG.CONTRACT);
   $("cAddr").title = CFG.CONTRACT;
@@ -348,44 +537,61 @@ async function initChain() {
     nextNonce = await provider.getTransactionCount(wallet.address, "pending");
     await refreshFee();
     await resync();
+    // Le slot joueur est-il deja ecrit ? Conditionne le gas_limit des envois.
+    const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
+    playerSlotWarm = Number(await c.claimsOf(wallet.address)) > 0;
     status("");
   } catch (e) {
     status("RPC injoignable : " + (e.shortMessage || e.message));
   }
   refreshBalance();
+  refreshOwners();
   setInterval(refreshBalance, 8000);
   setInterval(refreshFee, 15000);
+  setInterval(refreshOwners, 10000);
   pollLoop();
 }
 
 async function refreshFee() {
   try {
-    const f = await provider.getFeeData();
-    const base = f.maxFeePerGas ?? f.gasPrice ?? 100000000000n;
-    fee = { maxFeePerGas: base * 2n, maxPriorityFeePerGas: (f.maxPriorityFeePerGas ?? base / 10n) * 2n };
+    // On lit la base fee du bloc plutot que de reutiliser le maxFeePerGas de
+    // getFeeData, qui est deja majore : s'en servir comme base doublait le cout
+    // affiche au joueur.
+    const [f, blk] = await Promise.all([provider.getFeeData(), provider.getBlock("latest")]);
+    const base = blk?.baseFeePerGas ?? f.gasPrice ?? 100000000000n;
+    const tip = f.maxPriorityFeePerGas ?? 2000000000n;
+    fee = {
+      maxFeePerGas: base * 2n + tip,    // plafond large : on ne paie pas le plafond
+      maxPriorityFeePerGas: tip,
+      effective: base + tip             // ce qui sera reellement debite
+    };
   } catch {}
 }
 
 async function refreshBalance() {
   try {
-    const b = await provider.getBalance(wallet.address);
-    const mon = Number(ethers.formatEther(b));
-    // Monad debite gas_limit * prix, quoi qu'il arrive : le nombre de clics
-    // restants est calculable exactement, et c'est ce qui interesse le joueur.
-    const perTx = fee ? Number(ethers.formatEther(fee.maxFeePerGas * CFG.GAS_LIMIT)) : 0;
-    const clicks = perTx > 0 ? Math.floor(mon / perTx) : null;
-    $("wBal").innerHTML = mon > 0.001
-      ? `<span class="ok">${mon.toFixed(4)} MON</span>` +
-        (clicks !== null ? ` <span style="color:var(--dim)">~${clicks} clics</span>` : "")
-      : `<span class="err">${mon.toFixed(4)} MON — vide</span>`;
+    balanceWei = await provider.getBalance(wallet.address);
+    balanceKnown = true;
+    paintFuel();
+  } catch {}
+}
+
+/** Proprietaires des 1024 cases : 32 Ko de reponse, donc lu toutes les 10 s
+    seulement, et jamais dans la boucle de polling. */
+async function refreshOwners() {
+  if (!ethers.isAddress(CFG.CONTRACT)) return;
+  try {
+    const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
+    owners = (await c.getOwners()).map(a => a);
+    paintHolders();
   } catch {}
 }
 
 /** Relecture complete du plateau : corrige toute derive du flux d'evenements. */
 async function resync() {
   const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
-  const [teams, ep] = await Promise.all([c.getTeams(), c.epoch()]);
-  for (let i = 0; i < CELLS; i++) board[i] = Number(teams[i]);
+  const [colors, ep] = await Promise.all([c.getColors(), c.epoch()]);
+  for (let i = 0; i < CELLS; i++) board[i] = Number(colors[i]);
   epoch = Number(ep);
   dirty = true; paintUI();
 }
@@ -431,11 +637,13 @@ async function pollOnce() {
 
     for (const log of logs) {
       const { args } = iface.parseLog(log);
-      const ep = Number(args.epoch), cell = Number(args.cell), team = Number(args.team);
+      const ep = Number(args.epoch), cell = Number(args.cell), color = Number(args.color);
       if (ep !== epoch) { resetSeen = true; continue; }      // nouvelle manche
-      board[cell] = team;
+      board[cell] = color;
+      owners[cell] = args.player;
       flash[cell] = performance.now();
       totalClaims++; recent.push(Date.now());
+      notifyPaint(cell, color, wallet && args.player.toLowerCase() === wallet.address.toLowerCase());
     }
 
     cursor = toBlock;
@@ -453,24 +661,71 @@ async function pollOnce() {
 }
 
 /* ------------------------- envoi ------------------------------ */
+/**
+ * Le glisse n'est bride par aucun delai : c'est le propos du jeu. Mais on ne
+ * laisse pas partir une rafale illimitee de requetes vers le RPC, sinon trente
+ * navigateurs suffisent a le saturer. Les poses sont donc mises en file et
+ * ecoulees par CFG.MAX_INFLIGHT envois simultanes.
+ */
+function enqueue(cell) {
+  queue.push(cell);
+  pump();
+}
+
+async function pump() {
+  if (inflight >= CFG.MAX_INFLIGHT || queuePaused) return;
+  inflight++;
+  try {
+    while (queue.length && !queuePaused) {
+      await sendClaim(queue.shift());
+    }
+  } finally {
+    inflight--;
+  }
+}
+
 async function sendClaim(cell) {
   if (!wallet || !fee || !ethers.isAddress(CFG.CONTRACT)) return;
+
+  const gas = gasFor(cell);
+  const cost = costOf(gas);
+
+  // Garde-fou de solde : on arrete AVANT d'etre a sec. Une transaction sans
+  // provision est rejetee, desynchronise le nonce et declenche une rafale
+  // d'erreurs qui bloque le wallet pour de bon.
+  if (balanceKnown && balanceWei < cost * 2n) {
+    queue.length = 0;
+    status("Wallet a sec. Fais passer ton adresse pour une recharge, ou " +
+           "<a href='https://faucet.monad.xyz' target='_blank' rel='noopener' " +
+           "style='color:inherit'>le faucet</a>.", "err");
+    paintFuel();
+    return;
+  }
+
   const nonce = nextNonce++;
-  const tx = {
-    to: CFG.CONTRACT,
-    data: iface.encodeFunctionData("claim", [cell, myTeam]),
-    gasLimit: CFG.GAS_LIMIT,
-    nonce, chainId: CFG.CHAIN_ID, type: 2, value: 0n,
-    maxFeePerGas: fee.maxFeePerGas, maxPriorityFeePerGas: fee.maxPriorityFeePerGas
-  };
   try {
-    await wallet.sendTransaction(tx);
+    await wallet.sendTransaction({
+      to: CFG.CONTRACT,
+      data: iface.encodeFunctionData("claim", [cell, myColor]),
+      gasLimit: gas,
+      nonce, chainId: CFG.CHAIN_ID, type: 2, value: 0n,
+      maxFeePerGas: fee.maxFeePerGas, maxPriorityFeePerGas: fee.maxPriorityFeePerGas
+    });
     sent++;
+    playerSlotWarm = true;                 // le slot joueur est desormais ecrit
+    if (balanceKnown) balanceWei -= cost;  // estimation, recalee toutes les 8 s
   } catch (e) {
     failed++;
-    // nonce desynchronise (tx rejetee, solde vide...) : on se recale
+    // Une erreur laisse un trou de nonce : les envois suivants resteraient en
+    // attente indefiniment. On vide la file et on se recale sur la chaine.
+    queuePaused = true;
+    queue.length = 0;
     try { nextNonce = await provider.getTransactionCount(wallet.address, "pending"); } catch {}
-    if (String(e.message || "").match(/funds|balance/i)) status("Wallet vide : passe par le faucet.", "err");
+    try { await refreshBalance(); } catch {}
+    queuePaused = false;
+    if (String(e.message || "").match(/funds|balance/i)) {
+      status("Wallet a sec. Fais passer ton adresse pour une recharge.", "err");
+    }
   }
   paintUI();
 }
@@ -490,11 +745,13 @@ function tryPaint(ev) {
   const i = cellAt(ev);
   if (i < 0 || i === lastCell) return;
   lastCell = i;
-  if (board[i] === myTeam) return;      // le contrat refuserait de toute facon
-  board[i] = myTeam;                    // peinture optimiste : reponse instantanee
+  if (board[i] === myColor) return;     // le contrat refuserait de toute facon
+  board[i] = myColor;                   // peinture optimiste : reponse instantanee
+  owners[i] = wallet ? wallet.address : null;
   flash[i] = performance.now();
   dirty = true;
-  sendClaim(i);
+  notifyPaint(i, myColor, true);        // son immediat, aucun aller-retour chaine
+  enqueue(i);
 }
 
 if (!SPECTATE) {
@@ -504,10 +761,18 @@ if (!SPECTATE) {
   cv.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
 }
 
-$("btnCopy").onclick = () => {
+function copyFeedback(btn, label) {
+  const old = btn.textContent;
+  btn.textContent = label;
+  setTimeout(() => btn.textContent = old, 1500);
+}
+$("btnCopyAddr").onclick = () => {
+  navigator.clipboard.writeText(wallet ? wallet.address : "");
+  copyFeedback($("btnCopyAddr"), "Copiee");
+};
+$("btnCopyKey").onclick = () => {
   navigator.clipboard.writeText(store.get("tw.pk", ""));
-  $("btnCopy").textContent = "Copiee";
-  setTimeout(() => $("btnCopy").textContent = "Copier la cle privee", 1500);
+  copyFeedback($("btnCopyKey"), "Copiee");
 };
 $("btnSave").onclick = () => {
   store.set("tw.contract", $("inContract").value.trim());
@@ -519,9 +784,9 @@ $("btnSave").onclick = () => {
 if (SPECTATE) {
   $("app").classList.add("solo");
   $("side").style.display = "none";
-  $("hint").textContent = "Mode projecteur";
+  $("palette").style.display = "none";
 }
-renderTeams();
+renderPalette();
 layout();
 addEventListener("resize", layout);
 draw();
