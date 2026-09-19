@@ -409,10 +409,14 @@
     <div class="etape">
       <span class="num-etape">2</span>
       <div>
-        <b>Demande du MON</b>
-        <p>Montre cette adresse a l'organisateur, il te recharge en direct.
-        Ou passe par le faucet, qui donne de quoi poser quelques cases.</p>
-        <a class="act mini" href="https://faucet.monad.xyz" target="_blank" rel="noopener">OUVRIR LE FAUCET</a>
+        <b>Reessaie</b>
+        <p>Ton wallet est approvisionne automatiquement a l'arrivee. Si rien ne
+        s'est passe, relance la demande.</p>
+        <button class="act mini" id="btnRelancer">RELANCER</button>
+        <p class="foot" style="margin-top:9px">Toujours rien ? Montre cette adresse
+        a l'organisateur. En dernier recours seulement,
+        <a href="https://faucet.monad.xyz" target="_blank" rel="noopener"
+           style="color:var(--dim)">le faucet</a> donne de quoi poser quelques cases.</p>
       </div>
     </div>
     <div class="etape">
@@ -1473,6 +1477,14 @@ $("btnRecharge").onclick = () => {
   $("recharge").hidden = false;
 };
 $("btnFermerRecharge").onclick = () => { $("recharge").hidden = true; };
+$("btnRelancer").onclick = async () => {
+  const b = $("btnRelancer"), ancien = b.textContent;
+  b.disabled = true; b.textContent = "...";
+  const ok = await demanderFinancement(true);
+  b.textContent = ok ? "RECHARGE" : "ECHEC";
+  setTimeout(() => { b.textContent = ancien; b.disabled = false; }, 2000);
+  if (ok) $("recharge").hidden = true;
+};
 $("btnAvance").onclick = () => {
   const z = $("avance");
   z.hidden = !z.hidden;
