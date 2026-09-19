@@ -29,6 +29,19 @@ const MAX_PAR_IP = 4;
 const derniereDemande = new Map();
 const parIP = new Map();
 
+/**
+ * Une cle privee fait 32 octets, soit 64 caracteres hexadecimaux, que le
+ * prefixe 0x soit la ou non. Une adresse en fait 40 : si on en recoit une,
+ * c'est qu'on a colle le mauvais champ, et autant le dire franchement plutot
+ * que de laisser ethers renvoyer une erreur opaque.
+ */
+function normaliserCle(brut) {
+  const v = String(brut || "").trim().replace(/^0x/i, "");
+  if (v.length === 40) return null;          // c'est une adresse
+  if (!/^[0-9a-fA-F]{64}$/.test(v)) return null;
+  return "0x" + v;
+}
+
 function refus(res, code, raison) {
   return res.status(code).json({ ok: false, raison });
 }
@@ -44,14 +57,19 @@ export default async function handler(req, res) {
       funder_defini: Boolean(process.env.TW_FUNDER_KEY),
       deployer_defini: Boolean(process.env.TW_DEPLOYER_KEY),
       longueur_funder: (process.env.TW_FUNDER_KEY || "").length,
+      funder_utilisable: Boolean(normaliserCle(process.env.TW_FUNDER_KEY)),
+      indice: normaliserCle(process.env.TW_FUNDER_KEY) ? "ok"
+        : ((process.env.TW_FUNDER_KEY || "").trim().replace(/^0x/i, "").length === 40
+           ? "c'est une ADRESSE, il faut la CLE PRIVEE (64 caracteres hex)"
+           : "valeur absente ou longueur inattendue : attendu 64 caracteres hex"),
       vercel_env: process.env.VERCEL_ENV || null,
     });
   }
 
   if (req.method !== "POST") return refus(res, 405, "methode");
 
-  const cle = process.env.TW_FUNDER_KEY || process.env.TW_DEPLOYER_KEY;
-  if (!cle) return refus(res, 500, "financeur non configure");
+  const cle = normaliserCle(process.env.TW_FUNDER_KEY || process.env.TW_DEPLOYER_KEY);
+  if (!cle) return refus(res, 500, "financeur non configure ou valeur invalide");
 
   let adresse;
   try {
