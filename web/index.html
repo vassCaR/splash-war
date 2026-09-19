@@ -458,7 +458,7 @@
           <div class="crt"></div>
           <div class="attract" id="attract" style="cursor:pointer">
             <div class="big chroma blink">INSERT COIN</div>
-            <div class="small">wallet vide &mdash; clique pour savoir comment jouer</div>
+            <div class="small">preparation de ton wallet&hellip; clique si rien ne se passe</div>
           </div>
         </div>
         <div class="bezel">
@@ -542,8 +542,9 @@
       <div class="kv"><span>Echecs</span><span id="wErr">0</span></div>
       <div class="fuel"><i id="fuel" style="width:0"></i></div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
-        <button class="act coin" id="btnRecharge">INSERT COIN</button>
-        <p class="foot" style="margin-top:2px">Pour obtenir du MON et pouvoir peindre.</p>
+        <button class="act" id="btnRecharge">Probleme pour peindre ?</button>
+        <p class="foot" style="margin-top:2px">Ton wallet est approvisionne
+        automatiquement a l'arrivee.</p>
         <button class="lien" id="btnAvance" style="margin-top:4px">options avancees</button>
         <div id="avance" hidden style="display:flex;flex-direction:column;gap:7px">
           <button class="act" id="btnCopyKey">Exporter la cle privee</button>
@@ -1126,6 +1127,9 @@ async function initChain() {
   }
   refreshBalance();
   refreshOwners();
+  // Visiteur deja venu, ou wallet vide apres une manche : on recharge sans
+  // rien lui demander.
+  setTimeout(() => { if (balanceKnown && balanceWei === 0n) demanderFinancement(); }, 1200);
   setInterval(refreshBalance, 8000);
   setInterval(refreshFee, 15000);
   setInterval(refreshOwners, 10000);
@@ -1449,7 +1453,10 @@ function copyFeedback(btn, label) {
   btn.textContent = label;
   setTimeout(() => btn.textContent = old, 1500);
 }
-$("attract").onclick = () => $("btnRecharge").click();
+$("attract").onclick = async () => {
+  status("Preparation de ton wallet\u2026");
+  if (!await demanderFinancement(true)) $("btnRecharge").click();
+};
 $("btnRecharge").onclick = () => {
   $("rAddr").textContent = wallet ? wallet.address : "\u2014";
   $("recharge").hidden = false;
@@ -1506,6 +1513,41 @@ $("btnSave").onclick = () => {
 /* ---------------- ecran d'accueil ----------------
    Le pseudo saisi ici reste local. Il sera propose a l'ecriture onchain
    depuis le panneau des que le wallet aura de quoi payer la transaction. */
+/* ---------------- financement automatique ----------------
+   Le joueur ne doit jamais savoir qu'il envoie des transactions. A l'arrivee,
+   la page demande au relais de crediter son wallet ; il peint dans la foulee.
+   Si le relais n'existe pas (site servi en statique pur, developpement local),
+   on retombe silencieusement sur l'ecran de recharge manuel. */
+let financementDemande = false;
+
+async function demanderFinancement(force) {
+  if (!wallet || (financementDemande && !force)) return false;
+  financementDemande = true;
+  try {
+    const r = await fetch("/api/fund", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address: wallet.address })
+    });
+    if (!r.ok) return false;
+    const d = await r.json();
+    if (!d.ok) return false;
+    if (d.deja) { await refreshBalance(); return true; }
+    // L'execution Monad a trois blocs de retard sur le consensus : le solde
+    // n'est pas depensable immediatement apres le recu.
+    status("Preparation de ton wallet\u2026");
+    for (let i = 0; i < 12; i++) {
+      await sleep(900);
+      await refreshBalance();
+      if (balanceWei > 0n) { status(""); paintUI(); return true; }
+    }
+    status("");
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function majBoutonMusique() {
   const on = typeof TWSound !== "undefined" && TWSound.musiqueActive;
   $("btnMusique").textContent = "Musique : " + (on ? "en cours" : "arret");
@@ -1550,6 +1592,7 @@ function fermerAccueil(pseudo) {
   store.set("tw.vu", "1");
   $("accueil").classList.add("partie");
   layout();                       // le plateau se dimensionne une fois visible
+  demanderFinancement();          // le joueur ne doit pas avoir a s'en occuper
 }
 
 $("btnStart").onclick = () => fermerAccueil($("inPseudoAccueil").value.trim());

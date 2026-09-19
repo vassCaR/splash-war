@@ -1,18 +1,8 @@
 {
-  "name": "monad_blitz",
-  "version": "1.0.0",
-  "description": "Une grille 32x32 que toute la salle repeint en direct. Tu choisis une couleur dans une palette de 16, tu cliques ou tu glisses, chaque case traversee prend ta couleur. **Une case = une transaction onchain.** Pas de batch, pas de delai, pas de signature a chaque geste.",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "name": "splash-war",
+  "private": true,
+  "type": "module",
   "dependencies": {
-    "three": "^0.186.0"
+    "ethers": "^6.13.0"
   }
 }
