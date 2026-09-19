@@ -127,6 +127,17 @@
   .ligne .act{width:100%}
 
   /* ---------- typographies arcade ---------- */
+  /* Reserve au mode projecteur : le joueur n'a que faire d'un compteur de
+     transactions, et le lui montrer transforme un jeu en tableau de bord. */
+  /* .tech doublee : a specificite egale, la regle declaree en dernier gagne,
+     et .kv{display:flex} est plus bas dans la feuille. .tech.tech passe
+     devant sans recourir a !important. */
+  .tech.tech{display:none}
+  .solo .metric.tech.tech{display:block}
+  .solo .kv.tech.tech{display:flex}
+  .solo .credit.tech.tech,
+  .solo .fuel.tech.tech{display:block}
+
   .arcade{font-family:'Press Start 2P','IBM Plex Mono',monospace;line-height:1.6}
 
   /* Le traitement INSERT COIN : reserve aux mots qui doivent claquer.
@@ -462,7 +473,7 @@
           </div>
         </div>
         <div class="bezel">
-          <span class="credit">CREDIT <b id="credit">0</b></span>
+          <span class="credit tech">CREDIT <b id="credit">0</b></span>
           <span class="state" id="bezelState"></span>
         </div>
       </div>
@@ -473,10 +484,10 @@
   <aside class="side" id="side">
     <div class="block" id="blocJeu">
       <div class="metrics">
-        <div class="metric" id="tps"><div class="k">Transactions / sec</div><div class="v">0.0</div></div>
+        <div class="metric tech" id="tps"><div class="k">Transactions / sec</div><div class="v">0.0</div></div>
         <div class="metric"><div class="k">Poses (manche)</div><div class="v" id="mTotal">0</div></div>
         <div class="metric"><div class="k">Cases peintes</div><div class="v" id="mFill">0<small>/2304</small></div></div>
-        <div class="metric"><div class="k">Bloc</div><div class="v" id="mBlock">&mdash;</div></div>
+        <div class="metric tech"><div class="k">Bloc</div><div class="v" id="mBlock">&mdash;</div></div>
       </div>
 
       <div class="palette" id="palette">
@@ -537,10 +548,10 @@
       </div>
       <p class="foot" style="margin:6px 0 10px">Le pseudo passe onchain, une fois.
       Sans lui tu apparais en hexadecimal au videoprojecteur.</p>
-      <div class="kv"><span>Solde</span><span id="wBal">&mdash;</span></div>
+      <div class="kv tech"><span>Solde</span><span id="wBal">&mdash;</span></div>
       <div class="kv"><span>Cases posees</span><span id="wSent">0</span></div>
-      <div class="kv"><span>Echecs</span><span id="wErr">0</span></div>
-      <div class="fuel"><i id="fuel" style="width:0"></i></div>
+      <div class="kv tech"><span>Echecs</span><span id="wErr">0</span></div>
+      <div class="fuel tech"><i id="fuel" style="width:0"></i></div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
         <button class="act" id="btnRecharge">Probleme pour peindre ?</button>
         <p class="foot" style="margin-top:2px">Ton wallet est approvisionne
@@ -566,7 +577,7 @@
       <div class="kv"><span>Contrat</span><span class="mono-addr" id="cAddr">&mdash;</span></div>
       <div class="kv"><span>Manche</span><span id="cEpoch">&mdash;</span></div>
       <div class="kv"><span>RPC</span><span class="mono-addr" id="cRpc">&mdash;</span></div>
-      <div class="kv"><span>Cout par case</span><span id="cCost">&mdash;</span></div>
+      <div class="kv tech"><span>Cout par case</span><span id="cCost">&mdash;</span></div>
       <div id="netStatus" style="margin-top:10px"></div>
     </div>
 
@@ -1073,7 +1084,7 @@ function paintFuel() {
   const vide = credits < 1 && balanceWei === 0n;
   $("attract").classList.toggle("on", vide);
   $("bezelState").innerHTML = vide
-    ? '<span class="chroma blink">INSERT COIN</span>'
+    ? '<span class="chroma blink">PREPARATION\u2026</span>'
     : '<span style="color:var(--dim)">PUSH TO PAINT</span>';
 }
 
