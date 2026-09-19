@@ -61,7 +61,7 @@ WALLETS_FILE = os.environ.get("TW_WALLETS", "wallets.json")
 
 # Une capture consomme ~35k de gas en repeinture, ~68k sur une case vierge.
 # 90k couvre le pire cas avec de la marge, sans surfacturer les 3/4 des clics.
-GAS_LIMIT = 90_000
+GAS_LIMIT = 83000
 BLOCKS_BEFORE_SPEND = 3          # retard d'execution Monad
 GETLOGS_MAX_RANGE = 100          # plafond du RPC public
 
