@@ -11,25 +11,27 @@
 <script src="https://cdn.jsdelivr.net/npm/ethers@6/dist/ethers.umd.min.js"></script>
 <style>
   :root{
-    /* Fond et violets preleves directement sur le logo. */
+    /* Fond et violets preleves sur le logo. */
     --bg:#030119;
-    --bg2:#07032a;
     --panel:#0a0620;
     --line:#241552;
     --line2:#3a2278;
     --ink:#ece6ff;
     --dim:#7b6fa8;
 
-    /* Les quatre drapeaux du logo : ce sont les accents de toute l'interface. */
     --azur:#1a67ff;
     --turquoise:#27eddc;
     --magenta:#ff069d;
     --or:#ffc33b;
-
     --violet:#a855f7;
-    --violet2:#963ef5;
     --lilas:#d0a8ff;
     --empty:#120a30;
+
+    /* Aberration chromatique : les trois canaux d'un tube mal converge.
+       Jaune-vert au centre, frange rouge a gauche, cyan a droite. */
+    --chroma:#c9ee00;
+    --chroma-r:#ff0038;
+    --chroma-b:#00c8ff;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
@@ -40,65 +42,108 @@
     overflow:hidden;
     -webkit-font-smoothing:antialiased;
   }
-  /* Halo violet, comme la lueur derriere le mur du logo. */
   body::before{
     content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     background:
-      radial-gradient(1000px 700px at 50% -15%, rgba(150,62,245,.22), transparent 62%),
-      radial-gradient(700px 500px at 0% 100%, rgba(26,103,255,.12), transparent 60%),
-      radial-gradient(700px 500px at 100% 100%, rgba(255,6,157,.10), transparent 60%);
-  }
-  body::after{
-    content:'';position:fixed;inset:0;pointer-events:none;z-index:99;
-    background:repeating-linear-gradient(to bottom,rgba(255,255,255,.020) 0 1px,transparent 1px 3px);
-    mix-blend-mode:overlay;
+      radial-gradient(1000px 700px at 50% -15%, rgba(150,62,245,.20), transparent 62%),
+      radial-gradient(700px 500px at 0% 100%, rgba(26,103,255,.10), transparent 60%),
+      radial-gradient(700px 500px at 100% 100%, rgba(255,6,157,.09), transparent 60%);
   }
   img{image-rendering:pixelated}
-  .app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:1fr 340px}
-  .app.solo{grid-template-columns:1fr}
 
-  /* ---------- colonne gauche : plateau + palette ---------- */
+  /* ---------- typographies arcade ---------- */
+  .arcade{font-family:'Press Start 2P','IBM Plex Mono',monospace;line-height:1.6}
+
+  /* Le traitement INSERT COIN : reserve aux mots qui doivent claquer.
+     Applique partout il devient illisible, c'est un accent, pas une police. */
+  .chroma{
+    color:var(--chroma);
+    text-shadow:
+      -2px 0 0 var(--chroma-r),
+       2px 0 0 var(--chroma-b),
+       0 3px 0 rgba(0,0,0,.85);
+  }
+  @keyframes clignote{0%,44%{opacity:1}50%,94%{opacity:.12}100%{opacity:1}}
+  .blink{animation:clignote 1.15s steps(1,end) infinite}
+
+  .app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:1fr 348px}
+  .app.solo{grid-template-columns:1fr 310px}
+
+  /* ---------- colonne gauche ---------- */
   .stage{display:flex;flex-direction:column;min-width:0;padding:18px 26px 14px}
   .brand{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
   .brand img{height:56px;width:auto}
   .brand .sub{
-    color:var(--dim);font-size:10px;letter-spacing:.26em;text-transform:uppercase;
-    border-left:2px solid var(--line2);padding-left:12px;line-height:1.7
+    color:var(--dim);font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+    border-left:2px solid var(--line2);padding-left:12px;line-height:1.8
   }
   .metrics{display:flex;gap:30px;margin:14px 0 12px;align-items:flex-end;flex-wrap:wrap}
   .metric .k{font-size:9px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-  .metric .v{
-    font-family:'Press Start 2P','IBM Plex Mono',monospace;
-    font-size:21px;line-height:1.5;letter-spacing:.01em
-  }
+  .metric .v{font-family:'Press Start 2P','IBM Plex Mono',monospace;font-size:21px;line-height:1.5}
   .metric .v small{font-size:10px;color:var(--dim);margin-left:5px}
-  #tps .v{color:var(--turquoise);text-shadow:0 0 18px rgba(39,237,220,.5)}
-  .boardwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
-  canvas{
-    image-rendering:pixelated;
-    border:3px solid var(--line2);
-    box-shadow:0 0 0 1px rgba(0,0,0,.9), 0 0 70px -10px rgba(150,62,245,.55),
-               0 26px 70px rgba(0,0,0,.75);
-    cursor:crosshair;touch-action:none;
-  }
+  #tps .v{color:var(--turquoise);text-shadow:0 0 18px rgba(39,237,220,.55)}
 
-  /* ---------- palette sous le plateau ---------- */
+  /* ---------- la borne : bezel, tube, verre ---------- */
+  .boardwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+  .cabinet{
+    position:relative;padding:14px 14px 0;
+    background:linear-gradient(180deg,#1b1038,#0d0722);
+    border:2px solid #000;
+    border-radius:10px;
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,.07),
+      inset 0 -3px 0 rgba(0,0,0,.6),
+      0 0 60px -12px rgba(150,62,245,.5),
+      0 24px 60px rgba(0,0,0,.8);
+  }
+  .screen{position:relative;line-height:0;background:#000;
+          box-shadow:inset 0 0 0 3px #000, inset 0 0 40px rgba(0,0,0,.9)}
+  canvas{image-rendering:pixelated;cursor:crosshair;touch-action:none;display:block}
+
+  /* Verre du tube : lignes de balayage, vignettage, reflet. */
+  .crt{
+    position:absolute;inset:0;pointer-events:none;
+    background:
+      linear-gradient(103deg, rgba(255,255,255,.055) 0%, transparent 34%),
+      repeating-linear-gradient(to bottom, rgba(0,0,0,.17) 0 1px, transparent 1px 4px),
+      radial-gradient(125% 125% at 50% 50%, transparent 52%, rgba(0,0,0,.62) 100%);
+  }
+  /* Bandeau sous l'ecran, comme le CREDIT en bas d'une borne. */
+  .bezel{
+    display:flex;justify-content:space-between;align-items:center;gap:14px;
+    padding:9px 4px 10px;font-family:'Press Start 2P',monospace;font-size:9px;
+  }
+  .credit{color:var(--dim);letter-spacing:.04em}
+  .credit b{color:var(--or);font-weight:400}
+  .bezel .state{font-size:9px;letter-spacing:.04em}
+
+  /* Attract mode : ce qui s'affiche quand on ne peut pas jouer. */
+  .attract{
+    position:absolute;inset:0;display:none;flex-direction:column;gap:14px;
+    align-items:center;justify-content:center;text-align:center;
+    background:rgba(3,1,25,.52);font-family:'Press Start 2P',monospace;
+  }
+  .attract.on{display:flex}
+  .attract .big{font-size:clamp(14px,2.3vw,26px)}
+  .attract .small{font-size:9px;color:var(--dim);line-height:2;letter-spacing:.05em}
+
+  /* ---------- palette ---------- */
   .palette{margin-top:14px;display:flex;flex-direction:column;gap:8px;align-items:center}
   .swatches{display:grid;grid-template-columns:repeat(16,1fr);gap:6px;width:100%;max-width:600px}
   .sw{
     aspect-ratio:1;cursor:pointer;position:relative;
-    border:2px solid rgba(0,0,0,.55);
-    box-shadow:0 3px 0 rgba(0,0,0,.6);
-    transition:transform .1s steps(2), box-shadow .1s steps(2);
+    border:2px solid rgba(0,0,0,.6);
+    box-shadow:0 3px 0 rgba(0,0,0,.65);
+    transition:transform .08s steps(2), box-shadow .08s steps(2);
   }
-  .sw:hover{transform:translateY(-3px);box-shadow:0 6px 0 rgba(0,0,0,.6)}
+  .sw:hover{transform:translateY(-3px);box-shadow:0 6px 0 rgba(0,0,0,.65)}
   .sw.on{
     border-color:var(--ink);transform:translateY(-6px);
-    box-shadow:0 9px 0 rgba(0,0,0,.6), 0 0 22px -2px currentColor;
+    box-shadow:0 9px 0 rgba(0,0,0,.65), 0 0 22px -2px currentColor;
   }
   .palrow{
     display:flex;justify-content:space-between;align-items:center;width:100%;max-width:600px;
-    font-size:10.5px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase
+    font-size:10px;color:var(--dim);letter-spacing:.09em;text-transform:uppercase
   }
   .palrow b{font-family:'Press Start 2P',monospace;font-size:11px;letter-spacing:0}
   @media (max-width:1150px){ .swatches{grid-template-columns:repeat(8,1fr)} }
@@ -110,72 +155,73 @@
     padding:20px;display:flex;flex-direction:column;gap:18px;overflow-y:auto;
   }
   .block h2{
-    font-family:'Press Start 2P',monospace;font-size:9px;letter-spacing:.06em;
-    text-transform:uppercase;color:var(--violet);margin-bottom:12px;line-height:1.6;
+    font-family:'Press Start 2P',monospace;font-size:9px;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--violet);margin-bottom:12px;line-height:1.7;
     display:flex;justify-content:space-between;align-items:center;gap:8px;
   }
-  .stack{
-    display:flex;height:12px;width:100%;background:var(--empty);overflow:hidden;
-    margin-bottom:12px;border:1px solid rgba(0,0,0,.5)
-  }
+  .stack{display:flex;height:12px;width:100%;background:var(--empty);overflow:hidden;
+         margin-bottom:12px;border:1px solid rgba(0,0,0,.6)}
   .stack i{display:block;height:100%;transition:width .4s steps(8)}
   .scores{display:flex;flex-direction:column;gap:6px}
   .row{display:grid;grid-template-columns:13px 1fr 46px;align-items:center;gap:10px;font-size:11px}
   .row.me{background:rgba(168,85,247,.12);outline:1px solid rgba(168,85,247,.4);outline-offset:2px}
   .rk{color:var(--dim);font-variant-numeric:tabular-nums}
-  .chip{width:11px;height:11px;border:1px solid rgba(0,0,0,.5)}
+  .chip{width:11px;height:11px;border:1px solid rgba(0,0,0,.6)}
   .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
-  .kv{display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:5px 0;border-bottom:1px dashed #1c1140}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:5px 0;
+      border-bottom:1px dashed #1c1140}
   .kv span:first-child{color:var(--dim)}
   .kv span:last-child{font-variant-numeric:tabular-nums;word-break:break-all;text-align:right}
   .mono-addr{font-size:10px}
-  .fuel{height:8px;background:var(--empty);margin-top:10px;overflow:hidden;border:1px solid rgba(0,0,0,.5)}
+  .fuel{height:9px;background:var(--empty);margin-top:10px;overflow:hidden;
+        border:1px solid rgba(0,0,0,.6)}
   .fuel i{display:block;height:100%;background:var(--turquoise);transition:width .3s steps(6)}
+
+  /* ---------- boutons de borne ----------
+     Chunky, arete basse marquee, s'enfoncent au clic. Le bouton principal
+     porte le traitement INSERT COIN. */
   button.act, a.act{
-    display:block;width:100%;padding:10px;background:#140a33;color:var(--ink);
-    border:2px solid var(--line2);border-bottom-width:4px;text-align:center;text-decoration:none;
+    display:block;width:100%;padding:11px 10px;background:#140a33;color:var(--ink);
+    border:2px solid var(--line2);border-bottom-width:5px;text-align:center;text-decoration:none;
     font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;
-    text-transform:uppercase;cursor:pointer;transition:.1s steps(2)
+    text-transform:uppercase;cursor:pointer;transition:.08s steps(2)
   }
   button.act:hover, a.act:hover{border-color:var(--violet);color:var(--lilas);background:#1b0e45}
-  button.act:active, a.act:active{border-bottom-width:2px;transform:translateY(2px)}
-  .warn{
-    border:2px solid #4a3410;background:#1a1004;color:var(--or);
-    padding:10px 11px;font-size:10.5px;line-height:1.6
+  button.act:active, a.act:active{border-bottom-width:2px;transform:translateY(3px)}
+  a.coin, button.coin{
+    font-family:'Press Start 2P',monospace;font-size:11px;letter-spacing:.02em;
+    padding:15px 10px;background:#0b0620;border-color:#4a2d96;border-bottom-color:#2a1857;
+    color:var(--chroma);
+    text-shadow:-2px 0 0 var(--chroma-r), 2px 0 0 var(--chroma-b), 0 3px 0 rgba(0,0,0,.85);
   }
+  a.coin:hover, button.coin:hover{background:#16093a;border-color:var(--or);color:var(--chroma)}
+
+  .warn{border:2px solid #4a3410;background:#1a1004;color:var(--or);
+        padding:10px 11px;font-size:10.5px;line-height:1.6}
   .warn.err{border-color:#4a0f2c;background:#1a0410;color:var(--magenta)}
   .ok{color:var(--turquoise)}
   .err{color:var(--magenta)}
-  input.cfg{
-    width:100%;background:#07031c;border:2px solid var(--line);color:var(--ink);
-    padding:9px;font-family:'IBM Plex Mono',monospace;font-size:10.5px
-  }
+  input.cfg{width:100%;background:#07031c;border:2px solid var(--line);color:var(--ink);
+            padding:9px;font-family:'IBM Plex Mono',monospace;font-size:10.5px}
   input.cfg:focus{outline:none;border-color:var(--violet)}
-  .foot{font-size:9.5px;color:#4a4070;letter-spacing:.09em;line-height:1.8}
+  .foot{font-size:9.5px;color:#4a4070;letter-spacing:.09em;line-height:1.85}
 
-  /* ---------- mode projecteur ----------
-     Le plateau est carre : centre seul sur un 16/9, il laisse 60 % de l'ecran
-     vide. On met donc les chiffres a gauche et le classement a droite, en gros,
-     lisibles a cinq metres. C'est le plan que le jury regarde. */
-  .app.solo{grid-template-columns:1fr 300px}
+  /* ---------- mode projecteur ---------- */
   .solo .stage{
     padding:30px 34px;
     display:grid;grid-template-columns:270px 1fr;grid-template-rows:auto 1fr;
-    column-gap:34px;row-gap:18px;
+    column-gap:34px;row-gap:16px;
   }
   .solo .brand{grid-column:1 / -1}
   .solo .brand img{height:96px}
   .solo .brand .sub{font-size:12px}
-  .solo .metrics{
-    grid-column:1;grid-row:2;flex-direction:column;align-items:flex-start;
-    gap:30px;margin:0;justify-content:center
-  }
+  .solo .metrics{grid-column:1;grid-row:2;flex-direction:column;align-items:flex-start;
+                 gap:30px;margin:0;justify-content:center}
   .solo .metric .k{font-size:11px;margin-bottom:8px}
   .solo .metric .v{font-size:38px}
   .solo .metric .v small{font-size:15px}
   .solo .boardwrap{grid-column:2;grid-row:2}
   .solo .palette{display:none}
-  /* on garde les deux blocs de classement, on retire wallet, reseau, reglages */
   .solo .side{display:flex}
   .solo .side .block:nth-child(n+3){display:none}
   .solo .side h2{font-size:11px}
@@ -183,20 +229,22 @@
   .solo .side .stack{height:18px}
   .solo .side .chip{width:14px;height:14px}
   .solo .side .foot{font-size:11px}
+  .solo .bezel{font-size:12px}
+
   @media (max-width:900px){
     .app{grid-template-columns:1fr;grid-template-rows:auto auto;overflow-y:auto}
     .side{border-left:none;border-top:2px solid var(--line)}
     .brand img{height:42px}
-    .brand .sub{font-size:8.5px;letter-spacing:.18em}
+    .brand .sub{font-size:8.5px;letter-spacing:.17em}
     .metric .v{font-size:14px}
-    .metric .k{font-size:8px;letter-spacing:.14em}
+    .metric .k{font-size:8px;letter-spacing:.13em}
     .metrics{gap:14px;margin:12px 0 10px}
     .stage{padding:14px 16px 12px}
-    /* Sans hauteur imposee, .boardwrap s'effondre sur son contenu et le
-       plateau se retrouve minuscule alors que la palette prend tout. */
-    .boardwrap{min-height:min(92vw,58vh)}
+    .boardwrap{min-height:min(96vw,58vh)}
+    .cabinet{padding:9px 9px 0;border-radius:7px}
+    .bezel{font-size:8px;padding:7px 2px 8px}
     .swatches{grid-template-columns:repeat(8,1fr);max-width:330px;gap:5px}
-    .palrow{max-width:330px;font-size:9.5px}
+    .palrow{max-width:330px;font-size:9px}
     .palrow b{font-size:10px}
   }
 </style>
@@ -217,7 +265,22 @@
       <div class="metric"><div class="k">Bloc</div><div class="v" id="mBlock">&mdash;</div></div>
     </div>
 
-    <div class="boardwrap"><canvas id="board"></canvas></div>
+    <div class="boardwrap">
+      <div class="cabinet">
+        <div class="screen">
+          <canvas id="board"></canvas>
+          <div class="crt"></div>
+          <div class="attract" id="attract">
+            <div class="big chroma blink">INSERT COIN</div>
+            <div class="small" id="attractSub">wallet vide &mdash; recupere du MON pour jouer</div>
+          </div>
+        </div>
+        <div class="bezel">
+          <span class="credit">CREDIT <b id="credit">0</b></span>
+          <span class="state" id="bezelState"></span>
+        </div>
+      </div>
+    </div>
 
     <div class="palette" id="palette">
       <div class="swatches" id="swatches"></div>
@@ -250,7 +313,7 @@
       <div class="kv"><span>Echecs</span><span id="wErr">0</span></div>
       <div class="fuel"><i id="fuel" style="width:0"></i></div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
-        <a class="act" id="faucet" href="https://faucet.monad.xyz" target="_blank" rel="noopener">Recuperer du MON</a>
+        <a class="act coin" id="faucet" href="https://faucet.monad.xyz" target="_blank" rel="noopener">INSERT COIN</a>
         <button class="act" id="btnCopyAddr">Copier mon adresse</button>
         <button class="act" id="btnCopyKey">Copier la cle privee</button>
       </div>
@@ -393,27 +456,30 @@ function status(html, cls = "") {
 
 /* ------------------------- gas -------------------------------- */
 /**
- * Limite de gas pour une case donnee.
- * Une case deja peinte dans la manche en cours a forcement son slot non nul :
- * son SSTORE coutera le tarif a chaud. Une case qui parait vide peut avoir un
- * slot perime d'une manche precedente (donc non nul, donc moins cher), mais on
- * prend le tarif a froid par prudence : se tromper dans ce sens coute un peu
- * de marge, se tromper dans l'autre ferait echouer la transaction en la
- * facturant quand meme.
+ * Limite de gas d'une pose.
+ *
+ * ATTENTION au piege : l'etat de la case doit etre celui d'AVANT la peinture
+ * optimiste. tryPaint ecrit board[cell] immediatement pour que le geste
+ * reponde sans attendre la chaine ; lire board[cell] ici verrait donc toujours
+ * une case peinte, conclurait au tarif a chaud, et enverrait une limite trop
+ * basse. Sur Monad la transaction serait alors facturee ET perdue en OutOfGas.
+ * D'ou le drapeau transmis depuis tryPaint.
+ *
+ * Une case qui parait vide peut avoir un slot perime d'une manche precedente,
+ * donc non nul et moins cher : on prend quand meme le tarif a froid. Se tromper
+ * dans ce sens coute un peu de marge, se tromper dans l'autre brule la
+ * transaction.
  */
-function gasFor(cell) {
+function gasFor(celluleVierge) {
   const G = CFG.GAS;
-  const cellSlot = board[cell] !== 0 ? G.warm : G.cold;
-  const playerSlot = playerSlotWarm ? G.warm : G.cold;
-  return (G.fixed + cellSlot + playerSlot) * G.margin / 100n;
+  return (G.fixed
+        + (celluleVierge ? G.cold : G.warm)
+        + (playerSlotWarm ? G.warm : G.cold)) * G.margin / 100n;
 }
 
 /** Pire cas : case jamais peinte. Sert a annoncer un nombre de cases restantes
     qui ne surestime jamais ce que le joueur pourra reellement poser. */
-function gasWorst() {
-  const G = CFG.GAS;
-  return (G.fixed + G.cold + (playerSlotWarm ? G.warm : G.cold)) * G.margin / 100n;
-}
+function gasWorst() { return gasFor(true); }
 
 /** Cout reel attendu d'une pose : c'est le prix effectif qui est debite, pas maxFeePerGas. */
 function costOf(gas) { return fee ? gas * fee.effective : 0n; }
@@ -444,8 +510,19 @@ const cv = $("board"), ctx = cv.getContext("2d");
 let px = 18;
 
 function layout() {
-  const wrap = cv.parentElement.getBoundingClientRect();
-  px = Math.max(6, Math.floor(Math.min(wrap.width - 8, wrap.height - 8) / W));
+  // Le canvas est imbrique dans la borne : on mesure la place disponible sur
+  // .boardwrap et on retire le chassis (bordures, marges, bandeau CREDIT),
+  // lu sur le style calcule pour rester juste quand le CSS change.
+  const wrap = document.querySelector(".boardwrap").getBoundingClientRect();
+  const cab = document.querySelector(".cabinet");
+  const cs = getComputedStyle(cab);
+  const num = v => parseFloat(v) || 0;
+  const chassisX = num(cs.paddingLeft) + num(cs.paddingRight)
+                 + num(cs.borderLeftWidth) + num(cs.borderRightWidth);
+  const chassisY = num(cs.paddingTop) + num(cs.paddingBottom)
+                 + num(cs.borderTopWidth) + num(cs.borderBottomWidth)
+                 + document.querySelector(".bezel").offsetHeight;
+  px = Math.max(6, Math.floor(Math.min(wrap.width - chassisX, wrap.height - chassisY) / W));
   const size = px * W;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   cv.style.width = size + "px";
@@ -462,16 +539,35 @@ function draw() {
     ctx.fillStyle = "#050225";
     ctx.fillRect(0, 0, px * W, px * H);
     let live = false;
+    const relief = px >= 11;      // sous cette taille le biseau devient de la bouillie
     for (let i = 0; i < CELLS; i++) {
       const x = (i % W) * px, y = ((i / W) | 0) * px;
-      ctx.fillStyle = COLOR_HEX[board[i]] || EMPTY_HEX;
-      ctx.fillRect(x + 1, y + 1, px - 2, px - 2);
+      const t = board[i];
+      ctx.fillStyle = t ? COLOR_HEX[t] : EMPTY_HEX;
+      ctx.fillRect(x, y, px - 1, px - 1);
+
+      // Le relief des lettres de borne : arete claire en haut a gauche,
+      // sombre en bas a droite. C'est ce qui donne le volume chunky.
+      if (t && relief) {
+        ctx.fillStyle = "rgba(255,255,255,.26)";
+        ctx.fillRect(x, y, px - 1, 2);
+        ctx.fillRect(x, y, 2, px - 1);
+        ctx.fillStyle = "rgba(0,0,0,.38)";
+        ctx.fillRect(x, y + px - 3, px - 1, 2);
+        ctx.fillRect(x + px - 3, y, 2, px - 1);
+      }
+
       const age = now - flash[i];
-      if (age < 700) {                       // halo decroissant sur les poses fraiches
+      if (age < 620) {                       // remanence de phosphore
         live = true;
-        ctx.globalAlpha = 1 - age / 700;
-        ctx.fillStyle = "#ece6ff";
-        ctx.fillRect(x + 1, y + 1, px - 2, px - 2);
+        const k = 1 - age / 620;
+        ctx.globalAlpha = k;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(x, y, px - 1, px - 1);
+        if (relief) {                        // debordement sur les cases voisines
+          ctx.globalAlpha = k * 0.22;
+          ctx.fillRect(x - 2, y - 2, px + 3, px + 3);
+        }
         ctx.globalAlpha = 1;
       }
     }
@@ -555,15 +651,29 @@ function paintHolders() {
 function paintFuel() {
   if (!balanceKnown || !fee) return;
   const unit = costOf(gasWorst());
-  const left = unit > 0n ? Number(balanceWei / unit) : 0;
+  const credits = unit > 0n ? Number(balanceWei / unit) : 0;
   const mon = Number(ethers.formatEther(balanceWei));
-  $("wBal").innerHTML = left > 0
-    ? `<span class="${left > 8 ? "ok" : "err"}">${mon.toFixed(4)} MON</span>` +
-      ` <span style="color:var(--dim)">~${left} cases</span>`
+
+  $("wBal").innerHTML = credits > 0
+    ? `<span class="${credits > 8 ? "ok" : "err"}">${mon.toFixed(4)} MON</span>` +
+      ` <span style="color:var(--dim)">~${credits} cases</span>`
     : `<span class="err">${mon.toFixed(4)} MON — vide</span>`;
-  $("fuel").style.width = Math.min(100, left / 60 * 100) + "%";
-  $("fuel").style.background = left > 8 ? "var(--acid)" : "var(--pink)";
+  $("fuel").style.width = Math.min(100, credits / 60 * 100) + "%";
+  $("fuel").style.background = credits > 8 ? "var(--turquoise)" : "var(--magenta)";
   $("cCost").textContent = (Number(ethers.formatEther(unit)) || 0).toFixed(4) + " MON";
+
+  if (SPECTATE) return;                 // le projecteur a son propre bandeau
+
+  $("credit").textContent = String(Math.min(credits, 99)).padStart(2, "0");
+  $("credit").style.color = credits > 8 ? "var(--or)" : "var(--magenta)";
+
+  // Attract mode : une borne sans credit affiche INSERT COIN. Ici c'est
+  // litteralement vrai, le bouton mene au faucet.
+  const vide = credits < 1;
+  $("attract").classList.toggle("on", vide);
+  $("bezelState").innerHTML = vide
+    ? '<span class="chroma blink">INSERT COIN</span>'
+    : '<span style="color:var(--dim)">PUSH TO PAINT</span>';
 }
 
 /* ------------------------- palette ---------------------------- */
@@ -712,7 +822,9 @@ async function pollOnce() {
       owners[cell] = args.player;
       flash[cell] = performance.now();
       totalClaims++; recent.push(Date.now());
-      notifyPaint(cell, color, wallet && args.player.toLowerCase() === wallet.address.toLowerCase());
+      const aMoi = wallet && args.player.toLowerCase() === wallet.address.toLowerCase();
+      if (aMoi) playerSlotWarm = true;   // confirmation : le slot joueur est ecrit
+      notifyPaint(cell, color, aMoi);
     }
 
     cursor = toBlock;
@@ -736,8 +848,8 @@ async function pollOnce() {
  * navigateurs suffisent a le saturer. Les poses sont donc mises en file et
  * ecoulees par CFG.MAX_INFLIGHT envois simultanes.
  */
-function enqueue(cell) {
-  queue.push(cell);
+function enqueue(cell, celluleVierge) {
+  queue.push({ cell, celluleVierge });
   pump();
 }
 
@@ -753,10 +865,10 @@ async function pump() {
   }
 }
 
-async function sendClaim(cell) {
+async function sendClaim({ cell, celluleVierge }) {
   if (!wallet || !fee || !ethers.isAddress(CFG.CONTRACT)) return;
 
-  const gas = gasFor(cell);
+  const gas = gasFor(celluleVierge);
   const cost = costOf(gas);
 
   // Garde-fou de solde : on arrete AVANT d'etre a sec. Une transaction sans
@@ -781,7 +893,9 @@ async function sendClaim(cell) {
       maxFeePerGas: fee.maxFeePerGas, maxPriorityFeePerGas: fee.maxPriorityFeePerGas
     });
     sent++;
-    playerSlotWarm = true;                 // le slot joueur est desormais ecrit
+    // On ne marque PAS le slot joueur comme chaud ici : l'envoi accepte par le
+    // RPC ne dit rien de l'execution. Le drapeau est leve depuis les logs,
+    // quand la chaine confirme une pose a notre adresse.
     if (balanceKnown) balanceWei -= cost;  // estimation, recalee toutes les 8 s
   } catch (e) {
     failed++;
@@ -815,12 +929,13 @@ function tryPaint(ev) {
   if (i < 0 || i === lastCell) return;
   lastCell = i;
   if (board[i] === myColor) return;     // le contrat refuserait de toute facon
+  const celluleVierge = board[i] === 0; // a relever AVANT la peinture optimiste
   board[i] = myColor;                   // peinture optimiste : reponse instantanee
   owners[i] = wallet ? wallet.address : null;
   flash[i] = performance.now();
   dirty = true;
   notifyPaint(i, myColor, true);        // son immediat, aucun aller-retour chaine
-  enqueue(i);
+  enqueue(i, celluleVierge);
 }
 
 if (!SPECTATE) {
@@ -855,6 +970,8 @@ if (SPECTATE) {
   // poser un style inline ici ecraserait la regle qui reaffiche le panneau
   // de classement, et la moitie droite de l'ecran resterait vide.
   $("app").classList.add("solo");
+  $("credit").textContent = "\u221E";
+  $("bezelState").innerHTML = '<span class="chroma blink">SCAN TO PLAY</span>';
 }
 renderPalette();
 layout();
