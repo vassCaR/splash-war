@@ -229,7 +229,7 @@ const DEFAULTS = {
   // reellement couter, en s'appuyant sur ce que le front sait deja du plateau.
   // Recalibre par scripts/deploy.py sur une mesure eth_estimateGas reelle.
   GAS: {
-    fixed: 26000n,      // intrinseque + calldata + evenement + logique
+    fixed: 27400n,      // intrinseque + calldata + evenement + logique (mesure)
     cold:  22100n,      // SSTORE d'un slot encore a zero
     warm:   5000n,      // SSTORE d'un slot deja non nul
     margin:   115n      // pourcentage de marge

@@ -71,12 +71,18 @@ contract TerritoryWar {
 
     address public admin;
 
+    /// Recompenses en attente de retrait, indexees par adresse. Un slot par
+    /// gagnant, jamais partage : meme la distribution ne serialise rien.
+    mapping(address => uint256) public rewards;
+
     // ---------------------------------------------------------------------
     // Evenements : c'est ce que le front ecoute pour se mettre a jour en direct
     // ---------------------------------------------------------------------
 
     event Claimed(uint32 indexed epoch, uint16 indexed cell, address indexed player, uint8 color);
     event Reset(uint32 indexed epoch);
+    event Rewarded(uint32 indexed epoch, address indexed player, uint256 amount, bool paid);
+    event Funded(address indexed from, uint256 amount);
 
     // ---------------------------------------------------------------------
     // Erreurs (moins cheres en gas que des require avec message)
@@ -87,6 +93,8 @@ contract TerritoryWar {
     error Cooldown();
     error AlreadyYours();
     error NotAdmin();
+    error BadInput();
+    error Empty();
 
     modifier onlyAdmin() {
         if (msg.sender != admin) revert NotAdmin();
@@ -207,6 +215,78 @@ contract TerritoryWar {
             epoch += 1;
         }
         emit Reset(epoch);
+    }
+
+    // ---------------------------------------------------------------------
+    // Recompenses
+    //
+    // Tout ce bloc est deliberement HORS du chemin chaud. claim() ne lit ni
+    // n'ecrit aucun de ces slots : la cagnotte n'est touchee qu'a l'abondement
+    // et a la cloture, deux fois par manche, jamais 1024 fois. L'argument de
+    // parallelisation reste donc entier.
+    //
+    // Le classement lui-meme n'est pas calcule onchain : il se deduit de
+    // getOwners(), donc d'un etat qu'on stocke deja. Compter les points en
+    // storage aurait coute un compteur global, exactement ce qu'on evite.
+    // ---------------------------------------------------------------------
+
+    /// Abonde la cagnotte. Ouvert a tous : un sponsor peut arroser la manche.
+    receive() external payable {
+        emit Funded(msg.sender, msg.value);
+    }
+
+    function prizePool() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    /**
+     * Cloture la manche : distribue la cagnotte puis vide le plateau.
+     *
+     * Les parts sont fournies par l'admin, qui a lu getOwners() hors chaine et
+     * classe les joueurs. On paie en push, et si un transfert echoue (wallet
+     * qui rejette, contrat hostile) le montant est simplement credite pour un
+     * retrait ulterieur : une seule adresse recalcitrante ne peut pas bloquer
+     * la distribution de tous les autres.
+     *
+     * shares est en parts entieres, pas en pourcentage : [5,3,2] repartit
+     * la moitie, trois dixiemes et un cinquieme.
+     */
+    function endRound(address[] calldata winners, uint32[] calldata shares) external onlyAdmin {
+        if (winners.length == 0 || winners.length != shares.length) revert BadInput();
+
+        uint256 pot = address(this).balance;
+        if (pot == 0) revert Empty();
+
+        uint256 total;
+        for (uint256 i = 0; i < shares.length; i++) {
+            total += shares[i];
+        }
+        if (total == 0) revert BadInput();
+
+        uint32 e = epoch;
+        for (uint256 i = 0; i < winners.length; i++) {
+            uint256 part = (pot * shares[i]) / total;
+            if (part == 0) continue;
+            (bool ok, ) = winners[i].call{value: part, gas: 30000}("");
+            if (!ok) {
+                rewards[winners[i]] += part; // repli : retrait manuel
+            }
+            emit Rewarded(e, winners[i], part, ok);
+        }
+
+        unchecked {
+            epoch += 1;
+        }
+        emit Reset(epoch);
+    }
+
+    /// Retrait du repli, si le paiement direct avait echoue.
+    function withdraw() external {
+        uint256 amount = rewards[msg.sender];
+        if (amount == 0) revert Empty();
+        rewards[msg.sender] = 0; // ecriture avant appel
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert Empty();
     }
 
     /// Active / desactive le cooldown en direct pendant la demo.

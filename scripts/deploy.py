@@ -57,7 +57,7 @@ def load_env():
 load_env()
 
 RPC_DEFAULT = os.environ.get("MONAD_RPC", "https://testnet-rpc.monad.xyz")
-CHAIN_ID = 10143
+CHAIN_ID = int(os.environ.get("MONAD_CHAIN_ID", "10143"))
 EXPLORER = "https://testnet.monadscan.com"
 SOLC = "0.8.24"
 

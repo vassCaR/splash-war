@@ -54,7 +54,7 @@ def load_env(path=None):
 load_env()
 
 RPC_DEFAULT = os.environ.get("MONAD_RPC", "https://testnet-rpc.monad.xyz")
-CHAIN_ID = 10143
+CHAIN_ID = int(os.environ.get("MONAD_CHAIN_ID", "10143"))
 WALLETS_FILE = os.environ.get("TW_WALLETS", "wallets.json")
 
 # Une capture consomme ~35k de gas en repeinture, ~68k sur une case vierge.
