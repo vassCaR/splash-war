@@ -30,7 +30,10 @@ def generer(url, sortie_qr, sortie_affiche):
                        box_size=18, border=3)
     qr.add_data(url)
     qr.make(fit=True)
-    img = qr.make_image(fill_color=CLAIR, back_color=FOND).convert("RGB")
+    # Polarite standard : modules sombres sur fond clair. Un QR inverse est
+    # lu par la plupart des telephones, mais pas par tous, et on ne peut pas
+    # se permettre qu'une personne sur dix reste bloquee devant l'ecran.
+    img = qr.make_image(fill_color="#1a0533", back_color="#ffffff").convert("RGB")
     img.save(sortie_qr)
 
     # Affiche 1080x1500, lisible a plusieurs metres.
@@ -48,11 +51,13 @@ def generer(url, sortie_qr, sortie_affiche):
         aff.paste(logo, ((L - logo.width) // 2, y), logo)
         y += logo.height + 50
 
-    q = img.resize((720, 720), Image.NEAREST)
-    cadre = Image.new("RGB", (760, 760), VIOLET)
-    cadre.paste(q, (20, 20))
-    aff.paste(cadre, ((L - 760) // 2, y))
-    y += 800
+    # Marge blanche large autour du QR : la zone de silence fait partie du
+    # standard, sans elle les lecteurs accrochent mal.
+    q = img.resize((700, 700), Image.NEAREST)
+    cadre = Image.new("RGB", (780, 780), "#ffffff")
+    cadre.paste(q, (40, 40))
+    aff.paste(cadre, ((L - 780) // 2, y))
+    y += 820
 
     for texte, taille, couleur in (("SCANNE ET PEINS", 58, CLAIR),
                                    ("une case = une transaction onchain", 30, (168, 89, 242)),
