@@ -58,6 +58,9 @@ export default async function handler(req, res) {
       deployer_defini: Boolean(process.env.TW_DEPLOYER_KEY),
       longueur_funder: (process.env.TW_FUNDER_KEY || "").length,
       funder_utilisable: Boolean(normaliserCle(process.env.TW_FUNDER_KEY)),
+      deployer_utilisable: Boolean(normaliserCle(process.env.TW_DEPLOYER_KEY)),
+      une_cle_exploitable: Boolean(normaliserCle(process.env.TW_FUNDER_KEY)
+                                || normaliserCle(process.env.TW_DEPLOYER_KEY)),
       indice: normaliserCle(process.env.TW_FUNDER_KEY) ? "ok"
         : ((process.env.TW_FUNDER_KEY || "").trim().replace(/^0x/i, "").length === 40
            ? "c'est une ADRESSE, il faut la CLE PRIVEE (64 caracteres hex)"
@@ -68,7 +71,10 @@ export default async function handler(req, res) {
 
   if (req.method !== "POST") return refus(res, 405, "methode");
 
-  const cle = normaliserCle(process.env.TW_FUNDER_KEY || process.env.TW_DEPLOYER_KEY);
+  // On essaie chaque variable et on garde la premiere exploitable : si l'une
+  // contient une adresse collee par erreur, l'autre peut tres bien etre bonne.
+  const cle = normaliserCle(process.env.TW_FUNDER_KEY)
+           || normaliserCle(process.env.TW_DEPLOYER_KEY);
   if (!cle) return refus(res, 500, "financeur non configure ou valeur invalide");
 
   let adresse;
