@@ -1,0 +1,8 @@
+wallets.json
+deployment.json
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*:Zone.Identifier

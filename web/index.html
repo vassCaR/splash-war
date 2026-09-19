@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>TERRITORY WAR // MONAD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/ethers@6/dist/ethers.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#07080c;
+    --panel:#0d0f16;
+    --line:#1c202e;
+    --ink:#e8ecf5;
+    --dim:#6b7488;
+    --t1:#b8ff29;
+    --t2:#ff2d78;
+    --t3:#29e6ff;
+    --t4:#ffae29;
+    --empty:#12151f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Mono',ui-monospace,monospace;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* atmosphere : halo radial + grain + scanlines */
+  body::before{
+    content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(900px 600px at 30% -10%, rgba(41,230,255,.10), transparent 60%),
+      radial-gradient(700px 500px at 100% 110%, rgba(255,45,120,.08), transparent 60%);
+  }
+  body::after{
+    content:'';position:fixed;inset:0;pointer-events:none;z-index:99;
+    background:repeating-linear-gradient(to bottom,rgba(255,255,255,.022) 0 1px,transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+  .app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:1fr 340px;gap:0}
+  .app.solo{grid-template-columns:1fr}
+
+  /* ---------- colonne gauche : plateau ---------- */
+  .stage{display:flex;flex-direction:column;min-width:0;padding:22px 26px}
+  .brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .brand h1{
+    font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:30px;
+    letter-spacing:.14em;text-transform:uppercase;
+    background:linear-gradient(92deg,var(--t1),var(--t3) 55%,var(--t2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .brand .sub{color:var(--dim);font-size:11px;letter-spacing:.24em;text-transform:uppercase}
+  .metrics{display:flex;gap:26px;margin:16px 0 14px;align-items:flex-end;flex-wrap:wrap}
+  .metric .k{font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+  .metric .v{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:.02em}
+  .metric .v small{font-size:13px;color:var(--dim);font-weight:500;margin-left:4px}
+  #tps .v{color:var(--t1);text-shadow:0 0 22px rgba(184,255,41,.45)}
+  .boardwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
+  canvas{
+    image-rendering:pixelated;border:1px solid var(--line);
+    box-shadow:0 0 0 1px rgba(255,255,255,.03), 0 30px 90px rgba(0,0,0,.7);
+    cursor:crosshair;touch-action:none;
+  }
+  .hint{position:absolute;bottom:-4px;left:0;font-size:11px;color:var(--dim);letter-spacing:.06em}
+
+  /* ---------- colonne droite ---------- */
+  .side{
+    background:var(--panel);border-left:1px solid var(--line);
+    padding:22px 20px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;
+  }
+  .block h2{
+    font-family:'Chakra Petch',sans-serif;font-size:11px;font-weight:600;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--dim);margin-bottom:10px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .teams{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .team{
+    border:1px solid var(--line);background:#0a0c13;padding:11px 12px;cursor:pointer;
+    display:flex;align-items:center;gap:9px;transition:.15s;
+    font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  }
+  .team .dot{width:11px;height:11px;flex:none}
+  .team:hover{border-color:#333a4d}
+  .team.on{border-color:currentColor;box-shadow:inset 0 0 26px -12px currentColor}
+  .scores{display:flex;flex-direction:column;gap:7px}
+  .row{display:grid;grid-template-columns:62px 1fr 46px;align-items:center;gap:9px;font-size:12px}
+  .bar{height:7px;background:#12151f;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;transition:width .35s cubic-bezier(.2,.8,.2,1)}
+  .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:4px 0;border-bottom:1px dashed #171b27}
+  .kv span:first-child{color:var(--dim)}
+  .kv span:last-child{font-variant-numeric:tabular-nums;word-break:break-all;text-align:right}
+  .mono-addr{font-size:10.5px}
+  button.act{
+    width:100%;padding:10px;background:transparent;color:var(--ink);border:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:.15s
+  }
+  button.act:hover{border-color:var(--t3);color:var(--t3)}
+  a.act{display:block;text-align:center;text-decoration:none}
+  .warn{border:1px solid #3a2a12;background:#140f06;color:var(--t4);padding:9px 11px;font-size:11px;line-height:1.5}
+  .ok{color:var(--t1)}
+  .err{color:var(--t2)}
+  input.cfg{
+    width:100%;background:#07080c;border:1px solid var(--line);color:var(--ink);
+    padding:8px 9px;font-family:'IBM Plex Mono',monospace;font-size:11px
+  }
+  .foot{font-size:10px;color:#3d4457;letter-spacing:.1em;line-height:1.7}
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;grid-template-rows:1fr auto;overflow-y:auto}
+    .side{border-left:none;border-top:1px solid var(--line)}
+    .brand h1{font-size:22px}
+    .metric .v{font-size:26px}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <section class="stage">
+    <div class="brand">
+      <h1>Territory War</h1>
+      <span class="sub">1 clic = 1 transaction · monad testnet</span>
+    </div>
+
+    <div class="metrics">
+      <div class="metric" id="tps"><div class="k">Transactions / sec</div><div class="v">0.0</div></div>
+      <div class="metric"><div class="k">Captures (manche)</div><div class="v" id="mTotal">0</div></div>
+      <div class="metric"><div class="k">Cases prises</div><div class="v" id="mFill">0<small>/1024</small></div></div>
+      <div class="metric"><div class="k">Bloc</div><div class="v" id="mBlock">—</div></div>
+    </div>
+
+    <div class="boardwrap">
+      <canvas id="board"></canvas>
+      <div class="hint" id="hint">Choisis une equipe a droite, puis clique (ou glisse) sur la grille.</div>
+    </div>
+  </section>
+
+  <aside class="side" id="side">
+    <div class="block">
+      <h2>Equipe</h2>
+      <div class="teams" id="teams"></div>
+    </div>
+
+    <div class="block">
+      <h2>Score <span id="leader"></span></h2>
+      <div class="scores" id="scores"></div>
+    </div>
+
+    <div class="block">
+      <h2>Ton wallet jetable</h2>
+      <div class="kv"><span>Adresse</span><span class="mono-addr" id="wAddr">—</span></div>
+      <div class="kv"><span>Solde</span><span id="wBal">—</span></div>
+      <div class="kv"><span>Tx envoyees</span><span id="wSent">0</span></div>
+      <div class="kv"><span>Echecs</span><span id="wErr">0</span></div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
+        <a class="act" id="faucet" href="https://faucet.monad.xyz" target="_blank" rel="noopener">Recuperer du MON</a>
+        <button class="act" id="btnCopy">Copier la cle privee</button>
+      </div>
+      <p class="foot" style="margin-top:9px">Cle generee dans ce navigateur, stockee en localStorage. Testnet uniquement, n'y mets rien de reel.</p>
+    </div>
+
+    <div class="block">
+      <h2>Reseau</h2>
+      <div class="kv"><span>Contrat</span><span class="mono-addr" id="cAddr">—</span></div>
+      <div class="kv"><span>Manche</span><span id="cEpoch">—</span></div>
+      <div class="kv"><span>RPC</span><span class="mono-addr" id="cRpc">—</span></div>
+      <div id="netStatus" style="margin-top:10px"></div>
+    </div>
+
+    <div class="block">
+      <h2>Reglages</h2>
+      <input class="cfg" id="inContract" placeholder="0x... adresse du contrat" />
+      <input class="cfg" id="inRpc" placeholder="RPC url" style="margin-top:7px" />
+      <button class="act" id="btnSave" style="margin-top:7px">Appliquer et recharger</button>
+      <p class="foot" style="margin-top:9px">Mode projecteur : ajouter ?spectate=1 a l'url.</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* =====================================================================
+   CONFIG - remplis CONTRACT apres le deploiement (ou via ?contract=0x...)
+   ===================================================================== */
+const DEFAULTS = {
+  CONTRACT: "",                                  // <-- colle l'adresse ici
+  RPC:      "https://testnet-rpc.monad.xyz",     // alt: https://rpc.ankr.com/monad_testnet
+  CHAIN_ID: 10143,
+  EXPLORER: "https://testnet.monadscan.com",
+  POLL_MS:  800,        // frequence de lecture des logs
+  RESYNC_EVERY: 25,     // relecture complete du plateau tous les N polls
+  MAX_LOG_RANGE: 90,    // eth_getLogs est plafonne a 100 blocs sur le RPC public
+  // Monad facture le gas_limit, pas le gas_used : toute marge est payee plein pot.
+  // Une capture consomme ~35k en repeinture, ~68k sur une case vierge.
+  GAS_LIMIT: 90000n
+};
+
+const qs = new URLSearchParams(location.search);
+const store = {
+  get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }
+};
+
+const CFG = {
+  ...DEFAULTS,
+  CONTRACT: qs.get("contract") || store.get("tw.contract", "") || DEFAULTS.CONTRACT,
+  RPC:      qs.get("rpc")      || store.get("tw.rpc", "")      || DEFAULTS.RPC
+};
+const SPECTATE = qs.has("spectate");
+
+const W = 32, H = 32, CELLS = W * H;
+const TEAMS = [
+  { id:1, name:"ACID",    css:"--t1", hex:"#b8ff29" },
+  { id:2, name:"MAGENTA", css:"--t2", hex:"#ff2d78" },
+  { id:3, name:"CYAN",    css:"--t3", hex:"#29e6ff" },
+  { id:4, name:"AMBER",   css:"--t4", hex:"#ffae29" }
+];
+const EMPTY_HEX = "#12151f";
+
+const ABI = [
+  "function claim(uint16 cell, uint8 team) external",
+  "function getTeams() view returns (uint8[])",
+  "function epoch() view returns (uint32)",
+  "event Claimed(uint32 indexed epoch, uint16 indexed cell, address indexed player, uint8 team)"
+];
+
+/* ------------------------- etat local ------------------------- */
+const board  = new Uint8Array(CELLS);   // 0 = vide, 1..4 = equipe
+const flash  = new Float64Array(CELLS); // timestamp de la derniere capture (effet visuel)
+let epoch = 0, totalClaims = 0, myTeam = Number(store.get("tw.team", "1"));
+let sent = 0, failed = 0;
+let recent = [];                        // timestamps pour le compteur tx/s
+let provider, wallet, iface, claimedTopic;
+let nextNonce = 0, fee = null, cursor = 0, pollCount = 0, rpcFails = 0;
+let dirty = true;
+
+/* ------------------------- helpers ---------------------------- */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const short = a => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
+function status(html, cls="") { $("netStatus").innerHTML = html ? `<div class="warn ${cls}">${html}</div>` : ""; }
+
+/* ------------------------- rendu ------------------------------ */
+const cv = $("board"), ctx = cv.getContext("2d");
+let px = 18;
+
+function layout() {
+  const wrap = cv.parentElement.getBoundingClientRect();
+  px = Math.max(6, Math.floor(Math.min(wrap.width - 8, wrap.height - 8) / W));
+  const size = px * W;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.style.width = size + "px";
+  cv.style.height = size + "px";
+  cv.width = Math.floor(size * dpr);
+  cv.height = Math.floor(size * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  dirty = true;
+}
+
+function draw() {
+  if (dirty) {
+    const now = performance.now();
+    ctx.fillStyle = "#07080c";
+    ctx.fillRect(0, 0, px * W, px * H);
+    let live = false;
+    for (let i = 0; i < CELLS; i++) {
+      const x = (i % W) * px, y = ((i / W) | 0) * px;
+      const t = board[i];
+      ctx.fillStyle = t ? TEAMS[t - 1].hex : EMPTY_HEX;
+      ctx.fillRect(x + 1, y + 1, px - 2, px - 2);
+      const age = now - flash[i];
+      if (age < 700) {                       // halo decroissant sur les captures fraiches
+        live = true;
+        ctx.globalAlpha = 1 - age / 700;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(x + 1, y + 1, px - 2, px - 2);
+        ctx.globalAlpha = 1;
+      }
+    }
+    dirty = live;
+  }
+  requestAnimationFrame(draw);
+}
+
+function paintUI() {
+  const counts = [0, 0, 0, 0, 0];
+  let filled = 0;
+  for (let i = 0; i < CELLS; i++) { const t = board[i]; if (t) { counts[t]++; filled++; } }
+  const max = Math.max(1, ...counts.slice(1));
+  $("scores").innerHTML = TEAMS.map(t => `
+    <div class="row">
+      <span style="color:${t.hex}">${t.name}</span>
+      <span class="bar"><i style="background:${t.hex};width:${(counts[t.id] / max * 100).toFixed(1)}%"></i></span>
+      <span class="num">${counts[t.id]}</span>
+    </div>`).join("");
+  const best = counts.indexOf(Math.max(...counts.slice(1)), 1);
+  $("leader").innerHTML = filled ? `<span style="color:${TEAMS[best-1].hex}">${TEAMS[best-1].name}</span>` : "";
+  $("mFill").innerHTML = filled + "<small>/1024</small>";
+  $("mTotal").textContent = totalClaims;
+  $("cEpoch").textContent = epoch || "—";
+  $("wSent").textContent = sent;
+  $("wErr").innerHTML = failed ? `<span class="err">${failed}</span>` : "0";
+  const now = Date.now();
+  recent = recent.filter(t => now - t < 10000);
+  $("tps").querySelector(".v").textContent = (recent.length / 10).toFixed(1);
+}
+
+/* ------------------------- equipes ---------------------------- */
+function renderTeams() {
+  $("teams").innerHTML = TEAMS.map(t => `
+    <div class="team ${t.id === myTeam ? "on" : ""}" data-t="${t.id}" style="color:${t.hex}">
+      <span class="dot" style="background:${t.hex}"></span>${t.name}
+    </div>`).join("");
+  $("teams").querySelectorAll(".team").forEach(el => el.onclick = () => {
+    myTeam = Number(el.dataset.t); store.set("tw.team", myTeam); renderTeams();
+  });
+}
+
+/* ------------------------- chaine ----------------------------- */
+async function initChain() {
+  iface = new ethers.Interface(ABI);
+  claimedTopic = iface.getEvent("Claimed").topicHash;
+  provider = new ethers.JsonRpcProvider(CFG.RPC, CFG.CHAIN_ID, { staticNetwork: true });
+
+  let pk = store.get("tw.pk", null);
+  if (!pk) { pk = ethers.Wallet.createRandom().privateKey; store.set("tw.pk", pk); }
+  wallet = new ethers.Wallet(pk, provider);
+
+  $("wAddr").innerHTML = `<a href="${CFG.EXPLORER}/address/${wallet.address}" target="_blank"
+      rel="noopener" style="color:var(--t3);text-decoration:none">${short(wallet.address)}</a>`;
+  $("wAddr").title = wallet.address;
+  $("cAddr").textContent = short(CFG.CONTRACT);
+  $("cAddr").title = CFG.CONTRACT;
+  $("cRpc").textContent = CFG.RPC.replace(/^https?:\/\//, "");
+  $("inContract").value = CFG.CONTRACT;
+  $("inRpc").value = CFG.RPC;
+
+  if (!ethers.isAddress(CFG.CONTRACT)) {
+    status("Aucune adresse de contrat. Colle-la dans Reglages, ou ouvre la page avec ?contract=0x…");
+    return;
+  }
+
+  try {
+    nextNonce = await provider.getTransactionCount(wallet.address, "pending");
+    await refreshFee();
+    await resync();
+    status("");
+  } catch (e) {
+    status("RPC injoignable : " + (e.shortMessage || e.message));
+  }
+  refreshBalance();
+  setInterval(refreshBalance, 8000);
+  setInterval(refreshFee, 15000);
+  pollLoop();
+}
+
+async function refreshFee() {
+  try {
+    const f = await provider.getFeeData();
+    const base = f.maxFeePerGas ?? f.gasPrice ?? 100000000000n;
+    fee = { maxFeePerGas: base * 2n, maxPriorityFeePerGas: (f.maxPriorityFeePerGas ?? base / 10n) * 2n };
+  } catch {}
+}
+
+async function refreshBalance() {
+  try {
+    const b = await provider.getBalance(wallet.address);
+    const mon = Number(ethers.formatEther(b));
+    // Monad debite gas_limit * prix, quoi qu'il arrive : le nombre de clics
+    // restants est calculable exactement, et c'est ce qui interesse le joueur.
+    const perTx = fee ? Number(ethers.formatEther(fee.maxFeePerGas * CFG.GAS_LIMIT)) : 0;
+    const clicks = perTx > 0 ? Math.floor(mon / perTx) : null;
+    $("wBal").innerHTML = mon > 0.001
+      ? `<span class="ok">${mon.toFixed(4)} MON</span>` +
+        (clicks !== null ? ` <span style="color:var(--dim)">~${clicks} clics</span>` : "")
+      : `<span class="err">${mon.toFixed(4)} MON — vide</span>`;
+  } catch {}
+}
+
+/** Relecture complete du plateau : corrige toute derive du flux d'evenements. */
+async function resync() {
+  const c = new ethers.Contract(CFG.CONTRACT, ABI, provider);
+  const [teams, ep] = await Promise.all([c.getTeams(), c.epoch()]);
+  for (let i = 0; i < CELLS; i++) board[i] = Number(teams[i]);
+  epoch = Number(ep);
+  dirty = true; paintUI();
+}
+
+async function pollLoop() {
+  while (true) {
+    try {
+      await pollOnce();
+    } catch (e) {
+      // rate limit ou blip reseau : on reessaie, mais au bout de 5 echecs
+      // d'affilee on le dit, sinon on cherche le probleme du mauvais cote.
+      if (++rpcFails === 5) {
+        status("RPC en difficulte (" + (e.shortMessage || e.message || "").slice(0, 60) +
+               "). Bascule sur un autre RPC dans Reglages.", "err");
+      }
+    }
+    await sleep(CFG.POLL_MS);
+  }
+}
+
+async function pollOnce() {
+  if (!ethers.isAddress(CFG.CONTRACT)) return;
+
+  let resetSeen = false, forceResync = false;
+
+  const head = await provider.getBlockNumber();
+  if (!cursor) cursor = head;
+
+  if (head > cursor) {
+    // eth_getLogs plafonne a 100 blocs par requete. Si on a pris plus de retard
+    // que ca (rate limit, wifi qui tousse), on saute directement en avant :
+    // sans ce garde-fou la requete echoue en boucle et le plateau se fige
+    // definitivement alors que la chaine va tres bien.
+    if (head - cursor > CFG.MAX_LOG_RANGE) {
+      cursor = head - CFG.MAX_LOG_RANGE;
+      forceResync = true;
+    }
+    const toBlock = Math.min(head, cursor + CFG.MAX_LOG_RANGE);
+
+    const logs = await provider.getLogs({
+      address: CFG.CONTRACT, fromBlock: cursor + 1, toBlock, topics: [claimedTopic]
+    });
+
+    for (const log of logs) {
+      const { args } = iface.parseLog(log);
+      const ep = Number(args.epoch), cell = Number(args.cell), team = Number(args.team);
+      if (ep !== epoch) { resetSeen = true; continue; }      // nouvelle manche
+      board[cell] = team;
+      flash[cell] = performance.now();
+      totalClaims++; recent.push(Date.now());
+    }
+
+    cursor = toBlock;
+    if (logs.length) dirty = true;
+  }
+
+  rpcFails = 0;
+  $("mBlock").textContent = cursor;
+
+  if (resetSeen || forceResync || ++pollCount % CFG.RESYNC_EVERY === 0) {
+    if (resetSeen) totalClaims = 0;
+    await resync();
+  }
+  paintUI();
+}
+
+/* ------------------------- envoi ------------------------------ */
+async function sendClaim(cell) {
+  if (!wallet || !fee || !ethers.isAddress(CFG.CONTRACT)) return;
+  const nonce = nextNonce++;
+  const tx = {
+    to: CFG.CONTRACT,
+    data: iface.encodeFunctionData("claim", [cell, myTeam]),
+    gasLimit: CFG.GAS_LIMIT,
+    nonce, chainId: CFG.CHAIN_ID, type: 2, value: 0n,
+    maxFeePerGas: fee.maxFeePerGas, maxPriorityFeePerGas: fee.maxPriorityFeePerGas
+  };
+  try {
+    await wallet.sendTransaction(tx);
+    sent++;
+  } catch (e) {
+    failed++;
+    // nonce desynchronise (tx rejetee, solde vide...) : on se recale
+    try { nextNonce = await provider.getTransactionCount(wallet.address, "pending"); } catch {}
+    if (String(e.message || "").match(/funds|balance/i)) status("Wallet vide : passe par le faucet.", "err");
+  }
+  paintUI();
+}
+
+/* ------------------------- interactions ----------------------- */
+function cellAt(ev) {
+  const r = cv.getBoundingClientRect();
+  const p = ev.touches ? ev.touches[0] : ev;
+  const x = Math.floor((p.clientX - r.left) / (r.width / W));
+  const y = Math.floor((p.clientY - r.top) / (r.height / H));
+  if (x < 0 || y < 0 || x >= W || y >= H) return -1;
+  return y * W + x;
+}
+
+let painting = false, lastCell = -1;
+function tryPaint(ev) {
+  const i = cellAt(ev);
+  if (i < 0 || i === lastCell) return;
+  lastCell = i;
+  if (board[i] === myTeam) return;      // le contrat refuserait de toute facon
+  board[i] = myTeam;                    // peinture optimiste : reponse instantanee
+  flash[i] = performance.now();
+  dirty = true;
+  sendClaim(i);
+}
+
+if (!SPECTATE) {
+  cv.addEventListener("pointerdown", e => { painting = true; lastCell = -1; tryPaint(e); });
+  cv.addEventListener("pointermove", e => { if (painting) tryPaint(e); });
+  addEventListener("pointerup", () => { painting = false; lastCell = -1; });
+  cv.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+}
+
+$("btnCopy").onclick = () => {
+  navigator.clipboard.writeText(store.get("tw.pk", ""));
+  $("btnCopy").textContent = "Copiee";
+  setTimeout(() => $("btnCopy").textContent = "Copier la cle privee", 1500);
+};
+$("btnSave").onclick = () => {
+  store.set("tw.contract", $("inContract").value.trim());
+  store.set("tw.rpc", $("inRpc").value.trim());
+  location.reload();
+};
+
+/* ------------------------- boot ------------------------------- */
+if (SPECTATE) {
+  $("app").classList.add("solo");
+  $("side").style.display = "none";
+  $("hint").textContent = "Mode projecteur";
+}
+renderTeams();
+layout();
+addEventListener("resize", layout);
+draw();
+setInterval(paintUI, 500);
+initChain();
+</script>
+</body>
+</html>
