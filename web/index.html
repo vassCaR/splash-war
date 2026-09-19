@@ -592,7 +592,7 @@ const DEFAULTS = {
      que trente d'entre eux imposent au RPC. */
   POLL_MS:  1900,       // frequence de lecture des logs sur un telephone
   POLL_MS_SPECTATE: 900,
-  RESYNC_EVERY: 25,     // relecture complete du plateau tous les N polls
+  RESYNC_MS: 12000,     // relecture complete du plateau au moins tous les N ms
   MAX_LOG_RANGE: 90,    // eth_getLogs est plafonne a 100 blocs sur le RPC public
   MAX_INFLIGHT: 3,      // requetes d'envoi simultanees, pour ne pas noyer le RPC
 
@@ -616,13 +616,24 @@ const store = {
 
 const CFG = {
   ...DEFAULTS,
-  CONTRACT: qs.get("contract") || store.get("tw.contract", "") || DEFAULTS.CONTRACT,
+  /* L'adresse compilee dans la page passe AVANT celle gardee en memoire.
+     Sinon un navigateur ayant servi a un test precedent reste indefiniment
+     sur un ancien contrat, donc sur une autre toile, sans que personne ne
+     puisse s'en apercevoir : chacun voit un plateau coherent, mais pas le
+     meme. Un nouveau deploiement doit invalider tout reglage local. */
+  CONTRACT: qs.get("contract") || DEFAULTS.CONTRACT || store.get("tw.contract", ""),
   RPC:      qs.get("rpc")      || store.get("tw.rpc", "")      || DEFAULTS.RPC,
   // ?chainid= sert a pointer le front sur une chaine locale (anvil) pour
   // travailler le rendu sans dependre du testnet.
   CHAIN_ID: Number(qs.get("chainid")) || DEFAULTS.CHAIN_ID
 };
 const SPECTATE = qs.has("spectate");
+
+// Reglage local devenu obsolete : on le purge pour qu'il ne resurgisse pas.
+if (DEFAULTS.CONTRACT && store.get("tw.contract", "") &&
+    store.get("tw.contract", "").toLowerCase() !== DEFAULTS.CONTRACT.toLowerCase()) {
+  store.set("tw.contract", "");
+}
 
 const W = 48, H = 48, CELLS = W * H;
 
@@ -671,7 +682,7 @@ let myColor = Number(store.get("tw.color", "1")) || 1;
 let sent = 0, failed = 0;
 let recent = [];                        // timestamps pour le compteur tx/s
 let provider, wallet, iface, claimedTopic;
-let nextNonce = 0, fee = null, cursor = 0, pollCount = 0, rpcFails = 0;
+let nextNonce = 0, fee = null, cursor = 0, pollCount = Date.now(), rpcFails = 0;
 let dirty = true;
 
 /* Proprietaire de chaque case, relu periodiquement pour le classement.
@@ -1180,7 +1191,9 @@ async function pollOnce() {
   rpcFails = 0;
   $("mBlock").textContent = cursor;
 
-  if (resetSeen || forceResync || ++pollCount % CFG.RESYNC_EVERY === 0) {
+  const dernierResync = pollCount;
+  if (resetSeen || forceResync || Date.now() - dernierResync > CFG.RESYNC_MS) {
+    pollCount = Date.now();
     if (resetSeen) { totalClaims = 0; posesParJoueur.clear(); }
     await resync();
   }
