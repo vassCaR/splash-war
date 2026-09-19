@@ -1,43 +1,78 @@
-# Contexte projet — Splash War (Monad Blitz)
+# Contexte projet — Splash War (Monad Blitz Paris, 19/09/2026)
 
-## Objectif
+## Etat : LIVRE ET PRESENTE
 
-Hackathon Monad Blitz sur campus, format court : environ 7 heures de build,
-puis un pitch de 3 minutes devant un jury orienté applications grand public.
-On construit **Splash War**, un jeu de capture de territoire 100 % onchain.
-
-Une grille 32x32 (1024 cases), une palette de 16 couleurs, pas d'équipes codées.
-On choisit une couleur, on clique ou on glisse, chaque case traversée prend la
-couleur. N'importe qui peut reprendre n'importe quelle case. **Une case = une
-transaction onchain**, sans regroupement et sans délai entre deux poses.
-
-Si la salle s'organise par couleur, les équipes émergent d'elles-mêmes : c'est
-un meilleur argument que des équipes codées en dur.
-
-Le but de la démo : faire scanner un QR code à toute la salle, montrer le plateau
-qui explose de couleurs au vidéoprojecteur pendant que le compteur de
-transactions par seconde monte, puis expliquer pourquoi ce jeu ne peut pas
-exister sur une chaîne lente.
-
-## État actuel du repo
+Le projet a ete pitche et joue en salle. Le plateau a recu plus de 760 cases
+d'une vingtaine de joueurs finances automatiquement.
 
 ```
-contracts/SplashWar.sol   contrat complet, commenté, compile en 0.8.24, pas déployé
-web/index.html               front complet, un seul fichier, sans build
-bot.py                       gen / fund / refill / rank / payout / spam / watch
-scripts/deploy.py            compile + déploie + calibre le gas, sans Foundry
-tests/                       49 tests e2e sur un EVM py-evm en mémoire
-requirements-dev.txt         web3[tester] + pytest, installés dans .venv
-README.md                    ordre des opérations et script de pitch
+site        https://splash-war.vercel.app
+depot       https://github.com/vassCaR/splash-war   (public)
+contrat     0x458FB580596c971ba54b40244A7Eee90d886dD45   empreinte DD45
+reseau      Monad testnet, chain id 10143, bloc de deploiement 63922565
+wallet      0x50A4fe41b88B775eCCA324Bc5747fB31A8792526  (admin + financeur)
 ```
 
-**Backend terminé et testé.** 49 tests passent sur un EVM réel en mémoire, sans
-réseau ni clé : règles du jeu, palette, manches, cooldown, administration,
-récompenses, invariants d'architecture, gas mesuré, et `bot.py` de bout en bout.
-Le RPC testnet répond, les deux endpoints renvoient le chain id 10143.
+## Le jeu
 
-**Il reste le déploiement, qui attend une clé privée approvisionnée dans `.env`,
-puis toute la reprise du front, à faire ensemble.**
+Grille 48x48 (2304 cases), palette de 32 couleurs, un clic ou un glisse pose
+une case. Chaque case est une transaction onchain, sans regroupement. Pas
+d'equipes codees : les joueurs choisissent leur couleur, le classement se fait
+au nombre de cases posees.
+
+Format retenu pour la demo : **cooperatif**. L'organisateur projette une image,
+la salle la reproduit. Le second mode, chacun pour soi, n'a pas ete joue : le
+RPC public ne tient pas un concours de clics a vingt personnes.
+
+## Ce qu'il faut savoir avant d'y retoucher
+
+**Le gas est facture sur le gas_limit, pas sur le gas_used.** Toute marge est
+payee plein pot. `scripts/deploy.py` calibre les constantes sur une mesure
+reelle au deploiement. Mesure Monad : 90330 gas dans le pire cas, contre 71620
+sur un EVM local, soit 26 % d'ecart. Les constantes locales feraient mourir
+chaque transaction en OutOfGas sur le testnet.
+
+**L'adresse du contrat vit dans `web/contract.json`**, relu sans cache par le
+front. Elle n'est plus figee dans le HTML : un onglet ouvert avant un
+redeploiement se recale seul. Sans cela, deux joueurs peignent sur deux toiles
+differentes en voyant chacun un plateau coherent. Une empreinte de quatre
+caracteres est affichee dans l'en-tete pour verifier d'un coup d'oeil.
+
+**Le financement est automatique** via `api/fund.js`, une fonction serverless
+Vercel qui credite 0,6 MON a chaque nouveau wallet depuis la reserve. La cle
+vit dans les variables d'environnement Vercel, jamais dans le site statique.
+Sans ce relais, un joueur arrive avec zero MON et ne peut rien faire.
+
+**Charge RPC** : 0,35 requete par seconde et par telephone en lecture. A vingt
+joueurs, 7 req/s mesures, sous la limite d'environ 25 du RPC public. Mais un
+concours de clics ajoute une requete par case posee et fait exploser le total.
+
+## Tests
+
+```
+63 tests unitaires        EVM py-evm en memoire, sans reseau
+tests/audit_e2e.py        22 verifications, navigateur reel contre le testnet
+tests/test_fund.mjs       relais de financement, 8 verifications
+```
+
+L'invariant du projet est garde par `tests/test_invariants.py` : une pose ne
+doit modifier aucun slot fixe du contrat. Un `totalClaims++` ajoute pour un
+leaderboard fait echouer ce test, et serialiserait tout le jeu.
+
+## Commandes utiles
+
+```
+.venv/bin/python scripts/deploy.py --reset                 vider la toile (admin seul)
+.venv/bin/python bot.py rank --par poses --contract 0x...  classement officiel
+.venv/bin/python scripts/projection.py image.png           feuille de projection
+.venv/bin/python scripts/qr.py https://splash-war.vercel.app/   QR et affiche
+.venv/bin/python tests/audit_e2e.py [url]                  audit complet
+```
+
+Pas d'emojis dans le code ni dans les reponses. Rien qui mentionne Claude dans
+les commits, les README ou les pages publiees.
+
+---
 
 ## Stack
 
