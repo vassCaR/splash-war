@@ -447,7 +447,10 @@ const TWSound = (() => {
 
   const TEMPO = 96;                        // battements par minute
   const PAS_PAR_TEMPS = 4;                 // doubles croches
-  const HORIZON = 0.12;                    // secondes programmees a l'avance
+  /* La fenetre doit couvrir CONFORTABLEMENT un pas, sinon une boucle un peu
+     en retard programme une note dans le passe et ca hoquette. A 96 BPM un pas
+     dure 156 ms : 120 ms ne suffisaient pas. */
+  const HORIZON = 0.4;                     // secondes programmees a l'avance
   const VOLUME_MUSIQUE = 0.10;             // un fond, pas un accompagnement
 
   // Degres en demi-tons depuis la fondamentale. Quatre mesures.
@@ -515,7 +518,9 @@ const TWSound = (() => {
 
   function jouerPas(i, t) {
     const n = i % 16;
-    noteMusique(note(BASSE[n]) / 2, "triangle", 0.30, 0.26, t, 0);
+    // Duree tenue sous l'intervalle d'un pas : sinon chaque note empiete sur
+    // la suivante et la basse devient une bouillie continue.
+    if (n % 2 === 0) noteMusique(note(BASSE[n]) / 2, "triangle", 0.26, 0.26, t, 0);
     // L'arpege ne joue pas tous les pas : ca respire, et ca coute moins cher.
     // L'arpege ne tombe qu'un pas sur quatre : ca respire au lieu de marteler.
     if (n % 4 === 0) noteMusique(note(ARPEGE[n]), "sine", 0.42, 0.20, t, 5);

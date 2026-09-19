@@ -560,12 +560,7 @@
         <button class="act" id="btnRecharge">Probleme pour peindre ?</button>
         <p class="foot" style="margin-top:2px">Ton wallet est approvisionne
         automatiquement a l'arrivee.</p>
-        <button class="lien" id="btnAvance" style="margin-top:4px">options avancees</button>
-        <div id="avance" hidden style="display:flex;flex-direction:column;gap:7px">
-          <button class="act" id="btnCopyKey">Exporter la cle privee</button>
-          <p class="foot">Sauvegarde ton wallet pour le retrouver sur un autre
-          appareil. Ne la montre a personne.</p>
-        </div>
+        <div id="avance" hidden><button class="act" id="btnCopyKey">.</button></div>
       </div>
       <p class="foot" style="margin-top:9px">Cle generee dans ce navigateur, stockee en
       localStorage. Testnet uniquement.</p>
@@ -1485,11 +1480,10 @@ $("btnRelancer").onclick = async () => {
   setTimeout(() => { b.textContent = ancien; b.disabled = false; }, 2000);
   if (ok) $("recharge").hidden = true;
 };
-$("btnAvance").onclick = () => {
-  const z = $("avance");
-  z.hidden = !z.hidden;
-  $("btnAvance").textContent = z.hidden ? "options avancees" : "masquer";
-};
+/* L'export de cle a ete retire de l'interface : le financement est
+   automatique, plus personne n'a besoin de manipuler sa cle, et un bouton
+   pareil devant une salle inquiete a juste titre. Le gestionnaire reste
+   pour ne pas casser le code qui le reference. */
 $("btnCopyAddr").onclick = () => {
   navigator.clipboard.writeText(wallet ? wallet.address : "");
   copyFeedback($("btnCopyAddr"), "COPIEE");
