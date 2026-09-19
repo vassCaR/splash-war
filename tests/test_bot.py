@@ -157,3 +157,120 @@ def test_claim_data_encode_correctement(tw):
     data = bot.claim_data(777, 13)
     attendu = tw.encode_abi("claim", args=[777, 13])
     assert "0x" + data.hex() == attendu
+
+
+# ---------------------------------------------------------------------------
+# Classement et distribution de la cagnotte
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def tw_admin(w3, accounts):
+    """
+    TerritoryWar deploye par un compte dont on possede la cle, pour pouvoir
+    exercer les fonctions d'administration comme le ferait bot.py payout.
+    """
+    from conftest import ART
+    admin = bot.Account.create()
+    w3.eth.send_transaction({"from": accounts[0], "to": admin.address,
+                             "value": Web3.to_wei(10, "ether")})
+    c = w3.eth.contract(abi=ART["abi"], bytecode=ART["bin"])
+    tx = c.constructor().build_transaction({
+        "from": admin.address, "nonce": 0, "chainId": bot.CHAIN_ID,
+        "gas": 3_000_000, "gasPrice": w3.eth.gas_price,
+    })
+    h = w3.eth.send_raw_transaction(bot.raw_of(admin.sign_transaction(tx)))
+    addr = w3.eth.wait_for_transaction_receipt(h).contractAddress
+    return admin, w3.eth.contract(address=addr, abi=ART["abi"])
+
+
+def _peindre(w3, accounts, contrat, repartition):
+    """Fait poser des cases par des joueurs jetables. repartition = [n1, n2, ...]"""
+    joueurs, cell = [], 0
+    max_fee, tip = bot.fees(w3)
+    for n in repartition:
+        c = bot.Account.create()
+        w3.eth.send_transaction({"from": accounts[0], "to": c.address,
+                                 "value": Web3.to_wei(1, "ether")})
+        sender = bot.Sender(w3, c.key.hex(), contrat.address)
+        for _ in range(n):
+            sender.fire(cell, 4, max_fee, tip)
+            cell += 1
+        joueurs.append(c.address)
+    return joueurs
+
+
+def test_classement_par_territoire(w3, tw, accounts, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)          # pas de deployment.json parasite
+    joueurs = _peindre(w3, accounts, tw, [5, 3, 1])
+    c = bot.contract_of(w3, tw.address)
+
+    classement = bot.leaderboard(w3, c)
+    assert [a for a, _, _ in classement] == joueurs
+    assert [n for _, n, _ in classement] == [5, 3, 1]
+    assert [p for _, _, p in classement] == [5, 3, 1]   # poses = tenu, personne recouvert
+
+
+def test_le_classement_recompense_ce_qu_on_tient_pas_ce_qu_on_a_pose(
+        w3, tw, accounts, monkeypatch, tmp_path):
+    """
+    Le joueur qui pose beaucoup mais se fait recouvrir doit tomber au classement.
+    C'est toute la tension du jeu.
+    """
+    monkeypatch.chdir(tmp_path)
+    max_fee, tip = bot.fees(w3)
+    bosseur, sniper = [], []
+    for cible in (bosseur, sniper):
+        c = bot.Account.create()
+        w3.eth.send_transaction({"from": accounts[0], "to": c.address,
+                                 "value": Web3.to_wei(1, "ether")})
+        cible.append(c)
+    bosseur, sniper = bosseur[0], sniper[0]
+
+    sb = bot.Sender(w3, bosseur.key.hex(), tw.address)
+    for cell in range(10):
+        sb.fire(cell, 4, max_fee, tip)
+
+    ss = bot.Sender(w3, sniper.key.hex(), tw.address)
+    for cell in range(8):                       # recouvre 8 des 10 cases
+        ss.fire(cell, 9, max_fee, tip)
+
+    classement = bot.leaderboard(w3, bot.contract_of(w3, tw.address))
+    par_adresse = {a: (tenu, poses) for a, tenu, poses in classement}
+    assert par_adresse[bosseur.address] == (2, 10)   # a beaucoup pose, tient peu
+    assert par_adresse[sniper.address] == (8, 8)
+    assert classement[0][0] == sniper.address        # le sniper mene
+
+
+def test_payout_distribue_et_cloture(w3, accounts, tw_admin, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    admin, contrat = tw_admin
+    monkeypatch.setattr(bot, "connect", lambda rpc: w3)
+
+    joueurs = _peindre(w3, accounts, contrat, [6, 4, 2])
+    w3.eth.send_transaction({"from": accounts[0], "to": contrat.address,
+                             "value": Web3.to_wei(10, "ether")})
+    avant = {a: w3.eth.get_balance(a) for a in joueurs}
+
+    bot.cmd_payout(Args(rpc="local", contract=contrat.address, key=admin.key.hex(),
+                        shares="5,3,2", dry_run=False))
+
+    assert w3.eth.get_balance(joueurs[0]) - avant[joueurs[0]] == Web3.to_wei(5, "ether")
+    assert w3.eth.get_balance(joueurs[1]) - avant[joueurs[1]] == Web3.to_wei(3, "ether")
+    assert w3.eth.get_balance(joueurs[2]) - avant[joueurs[2]] == Web3.to_wei(2, "ether")
+    assert contrat.functions.epoch().call() == 2                      # manche clôturee
+    assert sum(1 for x in contrat.functions.getColors().call() if x) == 0
+
+
+def test_payout_dry_run_ne_touche_a_rien(w3, accounts, tw_admin, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    admin, contrat = tw_admin
+    monkeypatch.setattr(bot, "connect", lambda rpc: w3)
+    _peindre(w3, accounts, contrat, [3, 1])
+    w3.eth.send_transaction({"from": accounts[0], "to": contrat.address,
+                             "value": Web3.to_wei(4, "ether")})
+
+    bot.cmd_payout(Args(rpc="local", contract=contrat.address, key=admin.key.hex(),
+                        shares="5,3,2", dry_run=True))
+
+    assert contrat.functions.prizePool().call() == Web3.to_wei(4, "ether")
+    assert contrat.functions.epoch().call() == 1

@@ -6,6 +6,8 @@ bot.py - outillage Territory War : wallets jetables, financement, spam, monitori
     python bot.py fund  --key <cle_privee_source> --amount 0.05
     python bot.py spam   --contract 0x... --rate 30 --colors 4,9
     python bot.py refill --contract 0x... --amount 0.3
+    python bot.py rank   --contract 0x...
+    python bot.py payout --contract 0x... --shares 5,3,2
     python bot.py watch --contract 0x...
 
 Specificites Monad prises en compte ici :
@@ -64,6 +66,22 @@ BLOCKS_BEFORE_SPEND = 3          # retard d'execution Monad
 GETLOGS_MAX_RANGE = 100          # plafond du RPC public
 
 SELECTOR = Web3.keccak(text="claim(uint16,uint8)")[:4]
+# ABI minimale : juste ce dont l'outillage a besoin, pour ne pas dependre
+# d'une recompilation. deployment.json fournit l'ABI complete si elle existe.
+ABI = [
+    {"name": "getOwners", "type": "function", "stateMutability": "view", "inputs": [],
+     "outputs": [{"type": "address[]"}]},
+    {"name": "claimsOf", "type": "function", "stateMutability": "view",
+     "inputs": [{"name": "player", "type": "address"}], "outputs": [{"type": "uint32"}]},
+    {"name": "prizePool", "type": "function", "stateMutability": "view", "inputs": [],
+     "outputs": [{"type": "uint256"}]},
+    {"name": "epoch", "type": "function", "stateMutability": "view", "inputs": [],
+     "outputs": [{"type": "uint32"}]},
+    {"name": "endRound", "type": "function", "stateMutability": "nonpayable",
+     "inputs": [{"name": "winners", "type": "address[]"},
+                {"name": "shares", "type": "uint32[]"}], "outputs": []},
+]
+
 _topic = Web3.keccak(text="Claimed(uint32,uint16,address,uint8)").hex()
 CLAIMED_TOPIC = _topic if _topic.startswith("0x") else "0x" + _topic
 COLOR_NAMES = ["", "ACID", "LIME", "TEAL", "CYAN", "AZUR", "INDIGO", "VIOLET",
@@ -319,6 +337,114 @@ def cmd_refill(args):
 
 
 # ----------------------------------------------------------------------
+# rank / payout
+# ----------------------------------------------------------------------
+
+def contract_of(w3, address):
+    abi = ABI
+    if os.path.exists("deployment.json"):
+        try:
+            abi = json.load(open("deployment.json")).get("abi") or ABI
+        except Exception:
+            pass
+    return w3.eth.contract(address=Web3.to_checksum_address(address), abi=abi)
+
+
+def leaderboard(w3, contract, avec_poses=True):
+    """
+    Classement par territoire detenu, recalcule a la lecture.
+
+    Le score qui compte n'est pas le nombre de cases posees mais celles encore
+    tenues a la fin : peindre tot ne sert a rien si on se fait recouvrir.
+    Le nombre de poses reste affiche a cote, comme mesure d'effort.
+    """
+    owners = contract.functions.getOwners().call()
+    tenu = {}
+    for addr in owners:
+        if addr and int(addr, 16) != 0:
+            tenu[addr] = tenu.get(addr, 0) + 1
+    classement = sorted(tenu.items(), key=lambda kv: -kv[1])
+    if not avec_poses:
+        return [(a, n, 0) for a, n in classement]
+    sortie = []
+    for addr, n in classement:
+        try:
+            poses = contract.functions.claimsOf(addr).call()
+        except Exception:
+            poses = 0
+        sortie.append((addr, n, poses))
+    return sortie
+
+
+def cmd_rank(args):
+    w3 = connect(args.rpc)
+    c = contract_of(w3, args.contract)
+    classement = leaderboard(w3, c)
+    if not classement:
+        print("plateau vide, personne ne tient de territoire")
+        return
+    try:
+        pot = c.functions.prizePool().call()
+        print(f"manche {c.functions.epoch().call()}, cagnotte {fmt_mon(pot)}")
+    except Exception:
+        pass
+    total = sum(n for _, n, _ in classement)
+    print(f"{len(classement)} joueurs, {total} cases tenues sur 1024")
+    print(f"{'#':>3}  {'adresse':<44} {'tenu':>6} {'poses':>6}  {'garde':>6}")
+    for i, (addr, tenu, poses) in enumerate(classement[:args.top], start=1):
+        garde = f"{tenu / poses * 100:5.0f}%" if poses else "    -"
+        print(f"{i:>3}  {addr:<44} {tenu:>6} {poses:>6}  {garde:>6}")
+
+
+def cmd_payout(args):
+    """Cloture la manche : distribue la cagnotte aux N premiers, puis reset."""
+    w3 = connect(args.rpc)
+    key = args.key or os.environ.get("TW_DEPLOYER_KEY") or os.environ.get("TW_FUNDER_KEY")
+    if not key:
+        sys.exit("cle admin manquante : --key 0x... ou TW_DEPLOYER_KEY dans .env")
+    admin = Account.from_key(key)
+    c = contract_of(w3, args.contract)
+
+    pot = c.functions.prizePool().call()
+    if pot == 0:
+        sys.exit("cagnotte vide : envoie des MON a l'adresse du contrat d'abord")
+
+    classement = leaderboard(w3, c, avec_poses=False)
+    if not classement:
+        sys.exit("plateau vide, aucun gagnant a designer")
+
+    parts = [int(x) for x in args.shares.split(",") if x.strip()]
+    gagnants = [a for a, _, _ in classement[:len(parts)]]
+    parts = parts[:len(gagnants)]
+    total = sum(parts)
+
+    print(f"cagnotte {fmt_mon(pot)}, {len(gagnants)} gagnants")
+    for i, (addr, part) in enumerate(zip(gagnants, parts), start=1):
+        tenu = classement[i - 1][1]
+        print(f"  {i}. {addr}  {tenu:>4} cases  ->  {fmt_mon(pot * part // total)}")
+
+    if args.dry_run:
+        print("--dry-run : rien n'a ete envoye")
+        return
+
+    max_fee, tip = fees(w3)
+    fn = c.functions.endRound(gagnants, parts)
+    tx = fn.build_transaction({
+        "from": admin.address,
+        "nonce": w3.eth.get_transaction_count(admin.address, "pending"),
+        "chainId": CHAIN_ID, "type": 2,
+        "maxFeePerGas": max_fee, "maxPriorityFeePerGas": tip,
+    })
+    tx["gas"] = int(w3.eth.estimate_gas(tx) * 1.3)
+    h = w3.eth.send_raw_transaction(raw_of(admin.sign_transaction(tx)))
+    print(f"endRound  tx {h.hex()}")
+    rcpt = w3.eth.wait_for_transaction_receipt(h, timeout=120)
+    if rcpt.status != 1:
+        sys.exit("endRound a echoue")
+    print(f"cagnotte distribuee, nouvelle manche {c.functions.epoch().call()}")
+
+
+# ----------------------------------------------------------------------
 # spam
 # ----------------------------------------------------------------------
 
@@ -564,6 +690,19 @@ def main():
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--delay", type=float, default=0.05)
     r.set_defaults(func=cmd_refill)
+
+    k = sub.add_parser("rank", help="classement par territoire tenu")
+    k.add_argument("--contract", required=True)
+    k.add_argument("--top", type=int, default=15)
+    k.set_defaults(func=cmd_rank)
+
+    o = sub.add_parser("payout", help="distribue la cagnotte et cloture la manche")
+    o.add_argument("--contract", required=True)
+    o.add_argument("--key", help="cle admin (ou TW_DEPLOYER_KEY dans .env)")
+    o.add_argument("--shares", default="5,3,2",
+                   help="parts des gagnants, dans l'ordre (defaut 5,3,2)")
+    o.add_argument("--dry-run", action="store_true")
+    o.set_defaults(func=cmd_payout)
 
     w = sub.add_parser("watch", help="compteur tx/s en direct")
     w.add_argument("--contract", required=True)
