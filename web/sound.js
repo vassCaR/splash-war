@@ -431,8 +431,137 @@ const TWSound = (() => {
     }
   });
 
+
+  /* ==================================================================
+     Boucle musicale de fond, composee et synthetisee ici.
+
+     Rien n'est echantillonne ni emprunte : trois voix carrees ou
+     triangulaires plus une percussion de bruit, sur une grille de 16 pas.
+     Progression en mineur pentatonique, quatre mesures qui bouclent.
+
+     L'ordonnancement suit le motif classique du Web Audio : un reveil
+     toutes les 25 ms qui programme 120 ms a l'avance sur ctx.currentTime.
+     Programmer note par note avec setTimeout derape des dizaines de
+     millisecondes des que l'onglet travaille, et le tempo part en vrille.
+     ================================================================== */
+
+  const TEMPO = 132;                       // battements par minute
+  const PAS_PAR_TEMPS = 4;                 // doubles croches
+  const HORIZON = 0.12;                    // secondes programmees a l'avance
+  const VOLUME_MUSIQUE = 0.16;             // sous les bruitages, c'est un fond
+
+  // Degres en demi-tons depuis la fondamentale. Quatre mesures.
+  const BASSE   = [0,0,7,0, 5,5,0,5, 3,3,10,3, 7,7,5,7];
+  const ARPEGE  = [12,15,19,22, 17,20,24,20, 15,19,22,19, 19,22,26,22];
+  const CAISSE  = [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,1,0,0];
+  const CHARLEY = [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,1,1];
+
+  let musiqueActive = false, pas = 0, prochainTemps = 0, horloge = null;
+  let busMusique = null;
+
+  function bus() {
+    if (!busMusique) {
+      busMusique = ctx.createGain();
+      busMusique.gain.value = VOLUME_MUSIQUE;
+      busMusique.connect(master);
+    }
+    return busMusique;
+  }
+
+  /** Une note de la boucle. Sortie sur le bus musique, pas sur le master. */
+  function noteMusique(freq, type, duree, gain, t, detune) {
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (detune) osc.detune.setValueAtTime(detune, t);
+    const g = env.gain;
+    g.setValueAtTime(0, t);
+    g.linearRampToValueAtTime(gain, t + 0.006);
+    g.exponentialRampToValueAtTime(PLANCHER, t + duree);
+    g.setValueAtTime(0, t + duree);
+    osc.connect(env).connect(bus());
+    osc.start(t);
+    osc.stop(t + duree + 0.01);
+    osc.onended = () => { try { osc.disconnect(); env.disconnect(); } catch {} };
+  }
+
+  /** Percussion : bruit filtre, court. La caisse tape bas, le charley haut. */
+  function percussion(t, grave) {
+    const src = ctx.createBufferSource();
+    src.buffer = tampon();
+    src.loop = true;
+    const filtre = ctx.createBiquadFilter();
+    const env = ctx.createGain();
+    if (grave) {
+      filtre.type = "lowpass";
+      filtre.frequency.setValueAtTime(320, t);
+      filtre.frequency.exponentialRampToValueAtTime(90, t + 0.08);
+    } else {
+      filtre.type = "highpass";
+      filtre.frequency.setValueAtTime(7200, t);
+    }
+    const duree = grave ? 0.1 : 0.035;
+    const g = env.gain;
+    g.setValueAtTime(0, t);
+    g.linearRampToValueAtTime(grave ? 0.5 : 0.16, t + 0.002);
+    g.exponentialRampToValueAtTime(PLANCHER, t + duree);
+    g.setValueAtTime(0, t + duree);
+    src.connect(filtre).connect(env).connect(bus());
+    src.start(t, Math.random() * 0.4);
+    src.stop(t + duree + 0.01);
+    src.onended = () => { try { src.disconnect(); filtre.disconnect(); env.disconnect(); } catch {} };
+  }
+
+  function jouerPas(i, t) {
+    const n = i % 16;
+    noteMusique(note(BASSE[n]) / 2, "square", 0.16, 0.30, t, 0);
+    // L'arpege ne joue pas tous les pas : ca respire, et ca coute moins cher.
+    if (n % 2 === 0) noteMusique(note(ARPEGE[n]), "triangle", 0.13, 0.22, t, 6);
+    if (CAISSE[n]) percussion(t, true);
+    if (CHARLEY[n]) percussion(t, false);
+  }
+
+  function ordonnanceur() {
+    if (!musiqueActive || !ctx || ctx.state !== "running") return;
+    const intervalle = 60 / TEMPO / PAS_PAR_TEMPS;
+    while (prochainTemps < ctx.currentTime + HORIZON) {
+      jouerPas(pas, prochainTemps);
+      prochainTemps += intervalle;
+      pas = (pas + 1) % 16;
+    }
+  }
+
+  function musique(marche) {
+    if (!ctx || ctx.state !== "running") return false;
+    if (marche === undefined) marche = !musiqueActive;
+    if (marche === musiqueActive) return musiqueActive;
+    musiqueActive = marche;
+    if (marche) {
+      pas = 0;
+      prochainTemps = ctx.currentTime + 0.1;
+      horloge = setInterval(ordonnanceur, 25);
+      ordonnanceur();
+    } else {
+      clearInterval(horloge);
+      horloge = null;
+    }
+    return musiqueActive;
+  }
+
+  // L'onglet en arriere-plan : on coupe, ca ne sert a personne et ca consomme.
+  addEventListener("visibilitychange", () => {
+    if (document.hidden && musiqueActive) { clearInterval(horloge); horloge = null; }
+    else if (!document.hidden && musiqueActive && ctx && ctx.state === "running") {
+      prochainTemps = ctx.currentTime + 0.1;
+      horloge = setInterval(ordonnanceur, 25);
+    }
+  });
+
   return {
-    debloquer,                               // a cabler sur un bouton "activer le son"
+    debloquer,
+    musique,
+    get musiqueActive() { return musiqueActive; },                               // a cabler sur un bouton "activer le son"
     demarrage,
     recompense,
     blip,

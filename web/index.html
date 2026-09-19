@@ -97,6 +97,31 @@
   }
   .roue:hover{color:var(--lilas);transform:translateX(-50%) rotate(45deg)}
 
+  .voile{z-index:70;justify-content:center;gap:20px;padding:26px 20px}
+  .voile[hidden]{display:none}
+  .titre-voile{font-size:clamp(15px,3vw,26px);margin:0}
+  .etapes{display:flex;flex-direction:column;gap:16px;width:min(92vw,420px);text-align:left}
+  .etape{
+    display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start;
+    background:rgba(18,3,109,.42);border:2px solid var(--line);
+    border-radius:10px;padding:14px
+  }
+  .etape b{
+    display:block;font-family:'Press Start 2P',monospace;font-size:9.5px;
+    color:var(--lilas);margin-bottom:7px;line-height:1.6
+  }
+  .etape p{font-size:11px;color:var(--dim);line-height:1.8;margin-bottom:9px}
+  .num-etape{
+    font-family:'Press Start 2P',monospace;font-size:13px;color:var(--or);
+    text-align:center;line-height:1.3
+  }
+  .addr-grande{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);
+    word-break:break-all;line-height:1.7;margin-bottom:9px;
+    background:#07031c;border:1px solid var(--line);padding:8px;border-radius:6px
+  }
+  .etape .act.mini{width:auto;display:inline-block;padding:9px 16px}
+
   /* ---------- typographies arcade ---------- */
   .arcade{font-family:'Press Start 2P','IBM Plex Mono',monospace;line-height:1.6}
 
@@ -353,6 +378,41 @@
 <body>
 <div id="bgfx" aria-hidden="true"></div>
 
+<div id="recharge" class="accueil voile" hidden>
+  <h3 class="arcade titre-voile chroma">INSERT COIN</h3>
+  <p class="accroche">peindre une case coute du MON de testnet<br>voila comment en obtenir</p>
+
+  <div class="etapes">
+    <div class="etape">
+      <span class="num-etape">1</span>
+      <div>
+        <b>Ton adresse de jeu</b>
+        <div class="addr-grande" id="rAddr">&mdash;</div>
+        <button class="act mini" id="btnCopyAddr">COPIER</button>
+      </div>
+    </div>
+    <div class="etape">
+      <span class="num-etape">2</span>
+      <div>
+        <b>Demande du MON</b>
+        <p>Montre cette adresse a l'organisateur, il te recharge en direct.
+        Ou passe par le faucet, qui donne de quoi poser quelques cases.</p>
+        <a class="act mini" href="https://faucet.monad.xyz" target="_blank" rel="noopener">OUVRIR LE FAUCET</a>
+      </div>
+    </div>
+    <div class="etape">
+      <span class="num-etape">3</span>
+      <div>
+        <b>Peins</b>
+        <p>Le compteur CREDIT en bas du plateau te dit combien de cases il te
+        reste. Clique ou glisse, chaque case part en transaction.</p>
+      </div>
+    </div>
+  </div>
+
+  <button class="act" id="btnFermerRecharge" style="max-width:260px">RETOUR AU JEU</button>
+</div>
+
 <div id="accueil" class="accueil">
   <img class="heros" src="logo.png" alt="Splash War" />
   <p class="accroche">une case = une transaction onchain<br>la salle entiere peint le meme plateau</p>
@@ -392,9 +452,9 @@
         <div class="screen">
           <canvas id="board"></canvas>
           <div class="crt"></div>
-          <div class="attract" id="attract">
+          <div class="attract" id="attract" style="cursor:pointer">
             <div class="big chroma blink">INSERT COIN</div>
-            <div class="small" id="attractSub">wallet vide &mdash; recupere du MON pour jouer</div>
+            <div class="small">wallet vide &mdash; clique pour savoir comment jouer</div>
           </div>
         </div>
         <div class="bezel">
@@ -457,9 +517,14 @@
       <div class="kv"><span>Echecs</span><span id="wErr">0</span></div>
       <div class="fuel"><i id="fuel" style="width:0"></i></div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
-        <a class="act coin" id="faucet" href="https://faucet.monad.xyz" target="_blank" rel="noopener">INSERT COIN</a>
-        <button class="act" id="btnCopyAddr">Copier mon adresse</button>
-        <button class="act" id="btnCopyKey">Copier la cle privee</button>
+        <button class="act coin" id="btnRecharge">INSERT COIN</button>
+        <p class="foot" style="margin-top:2px">Pour obtenir du MON et pouvoir peindre.</p>
+        <button class="lien" id="btnAvance" style="margin-top:4px">options avancees</button>
+        <div id="avance" hidden style="display:flex;flex-direction:column;gap:7px">
+          <button class="act" id="btnCopyKey">Exporter la cle privee</button>
+          <p class="foot">Sauvegarde ton wallet pour le retrouver sur un autre
+          appareil. Ne la montre a personne.</p>
+        </div>
       </div>
       <p class="foot" style="margin-top:9px">Cle generee dans ce navigateur, stockee en
       localStorage. Testnet uniquement.</p>
@@ -484,6 +549,7 @@
       <input class="cfg" id="inContract" placeholder="0x... adresse du contrat" />
       <input class="cfg" id="inRpc" placeholder="RPC url" style="margin-top:7px" />
       <button class="act" id="btnSave" style="margin-top:7px">Appliquer et recharger</button>
+      <button class="act" id="btnMusique" style="margin-top:7px">Musique : arret</button>
       <p class="foot" style="margin-top:9px">Mode projecteur : ajouter ?spectate=1 a l'url.</p>
     </div>
   </aside>
@@ -1204,13 +1270,28 @@ function copyFeedback(btn, label) {
   btn.textContent = label;
   setTimeout(() => btn.textContent = old, 1500);
 }
+$("attract").onclick = () => $("btnRecharge").click();
+$("btnRecharge").onclick = () => {
+  $("rAddr").textContent = wallet ? wallet.address : "\u2014";
+  $("recharge").hidden = false;
+};
+$("btnFermerRecharge").onclick = () => { $("recharge").hidden = true; };
+$("btnAvance").onclick = () => {
+  const z = $("avance");
+  z.hidden = !z.hidden;
+  $("btnAvance").textContent = z.hidden ? "options avancees" : "masquer";
+};
 $("btnCopyAddr").onclick = () => {
   navigator.clipboard.writeText(wallet ? wallet.address : "");
-  copyFeedback($("btnCopyAddr"), "Copiee");
+  copyFeedback($("btnCopyAddr"), "COPIEE");
 };
 $("btnCopyKey").onclick = () => {
   navigator.clipboard.writeText(store.get("tw.pk", ""));
-  copyFeedback($("btnCopyKey"), "Copiee");
+  copyFeedback($("btnCopyKey"), "COPIEE");
+};
+$("btnMusique").onclick = () => {
+  try { TWSound.debloquer(); TWSound.musique(); } catch {}
+  majBoutonMusique();
 };
 $("btnSave").onclick = () => {
   store.set("tw.contract", $("inContract").value.trim());
@@ -1221,7 +1302,22 @@ $("btnSave").onclick = () => {
 /* ---------------- ecran d'accueil ----------------
    Le pseudo saisi ici reste local. Il sera propose a l'ecriture onchain
    depuis le panneau des que le wallet aura de quoi payer la transaction. */
+function majBoutonMusique() {
+  const on = typeof TWSound !== "undefined" && TWSound.musiqueActive;
+  $("btnMusique").textContent = "Musique : " + (on ? "en cours" : "arret");
+}
+
 function fermerAccueil(pseudo) {
+  // Le clic qui ferme l'accueil est un geste utilisateur : c'est la seule
+  // fenetre ou iOS autorise le demarrage de l'audio. On en profite.
+  try {
+    if (typeof TWSound !== "undefined") {
+      TWSound.debloquer();
+      TWSound.musique(true);
+      setTimeout(majBoutonMusique, 300);
+    }
+  } catch {}
+
   if (pseudo) {
     store.set("tw.pseudo", pseudo);
     $("wName").textContent = pseudo;
