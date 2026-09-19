@@ -152,7 +152,7 @@ const TWSound = (() => {
     // .then(...).catch(...) et non .catch seul : on avale aussi bien un refus
     // de resume qu'une erreur du carillon, sans jamais laisser une promesse
     // rejetee remonter dans un gestionnaire de geste.
-    if (ctx.state !== "running") ctx.resume().then(miseSousTension).catch(() => {});
+    if (ctx.state !== "running") ctx.resume().catch(() => {});
     else miseSousTension();
     return ctx.state;
   }
@@ -161,7 +161,9 @@ const TWSound = (() => {
   function miseSousTension() {
     if (demarre || !ctx || ctx.state !== "running" || !actif) return;
     demarre = true;
-    demarrage();
+    // Le son de mise sous tension a ete retire : un bip isole au lancement
+    // se prend facilement pour un bruit de pose. demarrage() reste exportee
+    // si on veut le rejouer a la main.
   }
 
   /* --- armement : on reessaie tant que ce n'est pas vraiment debloque -- */
