@@ -6,9 +6,13 @@ Hackathon Monad Blitz sur campus, format court : environ 7 heures de build,
 puis un pitch de 3 minutes devant un jury orienté applications grand public.
 On construit **Territory War**, un jeu de capture de territoire 100 % onchain.
 
-Une grille 32x32 (1024 cases), 4 équipes, 4 couleurs. On clique une case, elle
-prend la couleur de son équipe. N'importe qui peut reprendre n'importe quelle
-case. **Un clic = une transaction onchain**, sans regroupement.
+Une grille 32x32 (1024 cases), une palette de 16 couleurs, pas d'équipes codées.
+On choisit une couleur, on clique ou on glisse, chaque case traversée prend la
+couleur. N'importe qui peut reprendre n'importe quelle case. **Une case = une
+transaction onchain**, sans regroupement et sans délai entre deux poses.
+
+Si la salle s'organise par couleur, les équipes émergent d'elles-mêmes : c'est
+un meilleur argument que des équipes codées en dur.
 
 Le but de la démo : faire scanner un QR code à toute la salle, montrer le plateau
 qui explose de couleurs au vidéoprojecteur pendant que le compteur de
@@ -20,16 +24,20 @@ exister sur une chaîne lente.
 ```
 contracts/TerritoryWar.sol   contrat complet, commenté, compile en 0.8.24, pas déployé
 web/index.html               front complet, un seul fichier, sans build
-bot.py                       wallets jetables : gen / fund / spam / watch
-scripts/deploy.py            compile + déploie + calibre le gas_limit, sans Foundry
-requirements.txt             web3 + py-solc-x, installés dans .venv
+bot.py                       gen / fund / refill / rank / payout / spam / watch
+scripts/deploy.py            compile + déploie + calibre le gas, sans Foundry
+tests/                       49 tests e2e sur un EVM py-evm en mémoire
+requirements-dev.txt         web3[tester] + pytest, installés dans .venv
 README.md                    ordre des opérations et script de pitch
 ```
 
-Le contrat compile, le front passe `node --check`, `bot.py gen` tourne, le RPC testnet
-répond et les deux endpoints (officiel et Ankr) renvoient bien le chain id 10143.
-**Il reste le déploiement, qui attend une clé privée approvisionnée.**
-La priorité absolue est un aller-retour complet fonctionnel, pas des features.
+**Backend terminé et testé.** 49 tests passent sur un EVM réel en mémoire, sans
+réseau ni clé : règles du jeu, palette, manches, cooldown, administration,
+récompenses, invariants d'architecture, gas mesuré, et `bot.py` de bout en bout.
+Le RPC testnet répond, les deux endpoints renvoient le chain id 10143.
+
+**Il reste le déploiement, qui attend une clé privée approvisionnée dans `.env`,
+puis toute la reprise du front, à faire ensemble.**
 
 ## Stack
 
@@ -64,7 +72,7 @@ Ces choix sont l'argument technique du pitch. Si une modification les remet en
 cause, il faut me prévenir explicitement avant de l'appliquer.
 
 **Deux emplacements de stockage par transaction, tous les deux indépendants.**
-Une capture écrit la case (indexée par son numéro) et l'état du joueur (indexé
+Une pose écrit la case (indexée par son numéro) et l'état du joueur (indexé
 par son adresse). Deux joueurs qui cliquent deux cases différentes n'ont aucun
 état commun, donc rien n'oblige l'exécution séquentielle. C'est le cas favorable
 de l'EVM parallèle de Monad.
@@ -77,8 +85,29 @@ transaction.
 
 **Pas de batch.** Une case par transaction. C'est volontaire et c'est le propos.
 
+**Le glissé continu n'est bridé par aucun délai.** C'est le cœur du jeu. Seul un
+garde-fou de solde arrête les envois avant que le wallet soit à sec. Conséquence
+directe : un navigateur émet 8 à 15 tx/s, trente navigateurs saturent un RPC
+public. Une clé RPC dédiée n'est pas optionnelle.
+
 **Reset par numéro de manche.** Un compteur `epoch` invalide les 1024 cases en
-une seule écriture au lieu d'en réécrire 1024.
+une seule écriture au lieu d'en réécrire 1024. Mesuré : vider un plateau plein
+coûte le même prix que vider un plateau vide.
+
+**Le système de récompense reste hors du chemin chaud.** La cagnotte est abondée
+une fois et distribuée une fois par manche, jamais 1024 fois. `claim()` ne lit ni
+n'écrit aucun de ses slots. Le classement n'est pas calculé onchain : il se déduit
+de `getOwners()`, donc d'un état déjà stocké. Le score qui compte est le territoire
+encore tenu à la fin, pas le nombre de poses.
+
+**`tests/test_invariants.py` garde ces décisions.** Il photographie le storage
+avant et après une pose et exige qu'aucun slot fixe ne bouge. Un `totalClaims++`
+ajouté "juste pour le leaderboard" fait échouer ce test. Si un test d'invariant
+casse, ce n'est pas un détail d'implémentation, c'est la thèse du projet qui tombe.
+
+**Gas adaptatif côté front.** La limite suit l'état réel du slot visé : 43 010 pour
+une repeinture, 82 340 pour une case vierge. Comme Monad facture la limite, ça
+divise la note par deux sur le cas courant.
 
 **Cooldown à 0 par défaut.** Débit maximum, zéro transaction rejetée pendant la
 démo. `setCooldown(3)` existe pour le mode jeu équitable.
@@ -103,9 +132,10 @@ Il est descendu à 90 000, et `scripts/deploy.py` le recalibre sur le pire cas r
 (`eth_estimateGas` + 15 %) après le déploiement, dans le front comme dans `bot.py`.
 Ne jamais remonter cette valeur par précaution.
 
-**Budget MON de la démo.** Environ 0.009 MON par capture. 30 participants à 20 clics
-font 5.5 MON ; le bot à 30 tx/s brûle 16 MON par minute, donc en rafales courtes
-uniquement. Le faucet donne 0.05 MON à un wallet vierge, 2 MON avec un historique
+**Budget MON de la démo.** 0.0043 MON par repeinture, 0.0082 par case vierge
+(mesures réelles). Un geste de 32 cases coûte 0.14 MON, donc 0.5 MON par
+participant. 30 personnes font 15 MON ; le bot à 30 tx/s brûle 16 MON par minute,
+donc en rafales courtes uniquement. Le faucet donne 0.05 MON à un wallet vierge, 2 MON avec un historique
 Ethereum mainnet, 5 MON avec le rôle Full Access sur le Discord Monad : un wallet jetable
 généré dans le navigateur est vierge, les participants ne peuvent donc pas se servir
 eux-mêmes. Prendre le rôle Discord la veille et tirer sur plusieurs adresses.
@@ -137,10 +167,10 @@ non écoulé. Le front doit filtrer ces cas en amont pour ne pas brûler de gas.
 
 ## Ce qu'il reste à faire, par ordre de priorité
 
-1. Déployer le contrat : `export TW_DEPLOYER_KEY=0x... && .venv/bin/python scripts/deploy.py`
-   (le script injecte l'adresse dans le front et calibre le gas_limit tout seul)
+1. Déployer le contrat : remplir `.env`, puis `.venv/bin/python scripts/deploy.py`
+   (le script injecte l'adresse dans le front et calibre le gas tout seul)
 2. Valider l'aller-retour complet : clic, transaction, log, repeinture chez un second navigateur
-3. Tester `bot.py` de bout en bout : gen, fund, pause, spam, watch
+3. Reprendre le front ensemble : identité visuelle maison, retour sonore d'arcade
 4. Déployer le front en statique et générer le QR code pour la salle
 5. Tester à deux navigateurs simultanés, vérifier le compteur tx/s et le mode `?spectate=1`
 6. Seulement ensuite, si le temps le permet : leaderboard individuel, retour sonore, animation de capture

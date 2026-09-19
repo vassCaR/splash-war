@@ -1,87 +1,85 @@
 # Territory War — Monad Blitz
 
-Une grille 32x32 que toute la salle se dispute en direct. Un clic = une transaction onchain.
-Pas de batch, pas de signature groupee : on envoie une transaction par clic parce que sur
-Monad ca passe en moins d'une seconde.
+Une grille 32x32 que toute la salle repeint en direct. Tu choisis une couleur
+dans une palette de 16, tu cliques ou tu glisses, chaque case traversee prend ta
+couleur. **Une case = une transaction onchain.** Pas de batch, pas de delai,
+pas de signature a chaque geste.
+
+Il n'y a pas d'equipes codees. Chacun joue pour lui. Si la salle s'organise par
+couleur, les equipes emergent d'elles-memes.
 
 ```
-contracts/TerritoryWar.sol   le contrat (environ 150 lignes, tout est commente)
+contracts/TerritoryWar.sol   le contrat, tout est commente
 web/index.html               le front, un seul fichier, aucune installation
-bot.py                       wallets jetables, financement, spam, monitoring
-scripts/deploy.py            compilation + deploiement, sans Foundry
-requirements.txt             web3 + py-solc-x
+bot.py                       gen / fund / refill / rank / payout / spam / watch
+scripts/deploy.py            compile, deploie, calibre le gas, sans Foundry
+tests/                       49 tests e2e sur un EVM en memoire
 ```
 
 ---
 
 ## Le chiffre a connaitre avant tout le reste
 
-**Sur Monad, le gas est facture sur le `gas_limit`, pas sur le `gas_used`.** C'est une
-consequence de l'execution asynchrone : le bloc est vote avant d'etre execute, donc le
-protocole ne peut pas facturer ce qui a reellement ete consomme.
+**Sur Monad, le gas est facture sur le `gas_limit`, pas sur le `gas_used`.**
+C'est une consequence de l'execution asynchrone : le bloc est vote avant d'etre
+execute, donc le protocole ne peut pas facturer ce qui a reellement ete
+consomme. Toute marge de gas est payee plein pot, par tout le monde.
 
-Concretement, avec une base fee testnet mesuree a **100 gwei** :
+Couts reels mesures (`tests/test_invariants.py`), base fee testnet a 100 gwei :
 
-| gas_limit | cout par capture | captures par MON |
-|---|---|---|
-| 200 000 (valeur naive) | 0.0200 MON | 50 |
-| 90 000 (valeur actuelle) | 0.0090 MON | 111 |
+| situation | gas mesure | limite envoyee | cout |
+|---|---|---|---|
+| case vierge, joueur vierge | 71 551 | 82 340 | 0.0082 MON |
+| case vierge, joueur connu | 54 463 | 62 675 | 0.0063 MON |
+| **case deja peinte, joueur connu** (cas courant) | **37 491** | **43 010** | **0.0043 MON** |
 
-`scripts/deploy.py` mesure le pire cas reel avec `eth_estimateGas` juste apres le
-deploiement et reecrit `GAS_LIMIT` dans `web/index.html` et `bot.py`. Ne pas remonter
-cette valeur "au cas ou" : chaque millier de gas de marge est paye par tous les joueurs.
+Le front ajuste sa limite case par case selon ce qu'il sait deja du plateau :
+une case deja peinte a forcement son slot non nul, donc son ecriture coute le
+tarif a chaud. Ca divise la note par deux sur le cas courant. `scripts/deploy.py`
+recalibre ces constantes sur une mesure `eth_estimateGas` reelle juste apres le
+deploiement. Ne jamais les remonter "au cas ou".
 
-Budget a prevoir pour la demo :
+**Budget de la demo.** Un geste en travers du plateau, 32 cases, coute 0.14 MON.
+Compte **0.5 MON par participant** (environ 115 cases) soit 15 MON pour 30
+personnes. Le bot, lui, brule 16 MON par minute a 30 tx/s : en rafales courtes
+uniquement, et surtout pas en continu.
 
-- un participant qui joue 20 clics consomme environ **0.18 MON**
-- 30 participants : environ **5.5 MON**
-- le bot a 30 tx/s consomme environ **16 MON par minute** — c'est le poste le plus cher,
-  a lancer en rafales courtes, pas en continu
+**Le faucet ne donne pas la meme chose a tout le monde** : 0.05 MON pour un
+wallet vierge, 2 MON avec un historique Ethereum mainnet, 5 MON avec le role
+Full Access sur le Discord Monad. Les wallets jetables generes dans le
+navigateur sont vierges par construction, donc **les participants ne peuvent pas
+se servir eux-memes**. C'est toi qui les arroses, avec `bot.py refill`.
 
-**Le faucet ne donne pas la meme chose a tout le monde** : 0.05 MON pour un wallet vierge,
-2 MON pour un wallet ayant un historique sur Ethereum mainnet, 5 MON avec le role Full
-Access sur le Discord Monad. Un wallet jetable genere dans le navigateur est vierge, donc
-plafonne a 0.05 MON, soit 5 clics : **les participants ne peuvent pas se servir eux-memes**,
-c'est toi qui les arroses avec `bot.py fund --extra`.
-
-A faire la veille : prendre le role Discord, puis tirer 5 MON sur deux ou trois adresses
-differentes (cooldown de 12 h par adresse).
+A faire la veille : prendre le role Discord, puis tirer sur deux ou trois
+adresses differentes (cooldown de 12 h par adresse).
 
 ---
 
-## Ordre des operations (compte 45 minutes)
+## Ordre des operations
 
-### 1. Wallet et MON de testnet — la veille
-
-- Reseau : **Monad Testnet**, chain ID **10143**, symbole **MON**
-- RPC : `https://testnet-rpc.monad.xyz` — secours : `https://rpc.ankr.com/monad_testnet`
-- Faucet : https://faucet.monad.xyz (cooldown 12 h par adresse)
-- Explorer : https://testnet.monadscan.com
-
-Deux adresses distinctes : une pour deployer, une pour financer les wallets du bot.
-
-### 2. Installer et deployer
+### 1. Installer
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest          # 49 tests, aucun reseau requis
+```
 
-export TW_DEPLOYER_KEY=0x...
+### 2. Deployer
+
+```bash
+cp .env.example .env    # puis remplir TW_DEPLOYER_KEY
 .venv/bin/python scripts/deploy.py
 ```
 
-Le script compile avec solc 0.8.24, deploie, calibre le `gas_limit`, ecrit
-`deployment.json` et injecte l'adresse directement dans `web/index.html`. Il affiche
-l'adresse, le lien explorer et les commandes suivantes toutes pretes.
+Le script compile en solc 0.8.24, deploie, calibre le gas sur une mesure reelle,
+ecrit `deployment.json` et injecte l'adresse dans `web/index.html`. Il affiche
+ensuite les commandes suivantes toutes pretes.
+
+La cle reste dans `.env`, jamais sur une ligne de commande ni dans l'historique
+du shell. `.env` est dans `.gitignore`.
 
 Variante Remix si le reseau du campus bloque le telechargement de solc : coller
 `contracts/TerritoryWar.sol`, compiler en 0.8.24, deployer via Injected Provider.
-
-Variante Foundry :
-
-```bash
-forge create contracts/TerritoryWar.sol:TerritoryWar \
-  --rpc-url https://testnet-rpc.monad.xyz --private-key $PK --broadcast
-```
 
 ### 3. Lancer le front
 
@@ -89,100 +87,127 @@ forge create contracts/TerritoryWar.sol:TerritoryWar \
 cd web && python3 -m http.server 8080
 ```
 
-`http://localhost:8080/` fonctionne directement si tu es passe par `deploy.py`. Sinon
-`?contract=0x...` ou le panneau Reglages.
+`http://localhost:8080/` marche directement apres `deploy.py`. Sinon
+`?contract=0x...`, ou le panneau Reglages.
 
-Pour la salle : deposer le dossier `web/` sur Vercel, Netlify ou Cloudflare Pages
-(fichier statique, glisser-deposer) et distribuer un QR code vers
-`https://ton-url/?contract=0x...`.
+Pour la salle : deposer `web/` sur Vercel, Netlify ou Cloudflare Pages et
+distribuer un QR code vers `https://ton-url/?contract=0x...`.
+Mode projecteur : `?spectate=1`.
 
-Le front genere un **wallet jetable** dans chaque navigateur : aucune extension, aucune
-popup de signature. C'est ce qui rend la demo jouable a 30 personnes. Le panneau affiche
-le solde en **nombre de clics restants**, l'unite qui compte vraiment.
-
-### 4. Remplir le plateau avec le bot
+### 4. Faire vivre la partie
 
 ```bash
-.venv/bin/python bot.py gen --n 20
-.venv/bin/python bot.py fund --key <ta_cle> --amount 0.2
-# attendre 2 s : l'execution Monad a 3 blocs de retard sur le consensus
-.venv/bin/python bot.py spam --contract 0x... --rate 30 --teams 1,3 --duration 30
-.venv/bin/python bot.py watch --contract 0x...
+# recharger les joueurs sans leur demander leur adresse :
+# leurs transactions les ont deja identifies
+.venv/bin/python bot.py refill --contract 0x... --min 0.08 --amount 0.3
+
+# voir qui mene
+.venv/bin/python bot.py rank --contract 0x...
+
+# abonder la cagnotte : un simple virement a l'adresse du contrat
+
+# cloturer : paie les gagnants et vide le plateau en une transaction
+.venv/bin/python bot.py payout --contract 0x... --shares 5,3,2 --dry-run
+.venv/bin/python bot.py payout --contract 0x... --shares 5,3,2
 ```
 
-`spam` annonce son debit de combustion en MON/minute et le temps de spam restant avant
-que les wallets soient vides. `--region x0,y0,x1,y1` cible une zone : pratique pour
-pre-dessiner grossierement un logo avant le pitch.
+Plan B si la salle est vide : `gen`, `fund`, puis
+`spam --contract 0x... --rate 30 --colors 4,9 --duration 30`.
+`spam` annonce son debit de combustion en MON par minute et le temps restant
+avant que les wallets soient a sec.
 
-Pour arroser les wallets des participants (le front affiche leur adresse) :
+---
 
-```bash
-.venv/bin/python bot.py fund --key <ta_cle> --extra-only --extra 0xaaa 0xbbb --amount 0.2
-```
+## Le systeme de recompense
+
+Le score qui compte n'est **pas** le nombre de cases posees, c'est le territoire
+encore tenu quand la manche se termine. Peindre tot ne sert a rien si on se fait
+recouvrir : c'est ce qui cree la tension dans les dernieres secondes.
+
+Le nombre de poses reste compte a cote, comme mesure d'effort. Il ne coute rien :
+il est stocke dans le meme slot que l'etat du joueur, qui est ecrit de toute
+facon.
+
+La cagnotte est abondee par un simple virement a l'adresse du contrat, par
+n'importe qui. `endRound` la distribue au prorata de parts fournies par l'admin,
+puis cloture la manche. Le paiement est direct ; si une adresse refuse les fonds,
+son du est mis de cote et elle le retire elle-meme avec `withdraw()` — une
+adresse recalcitrante ne peut pas bloquer la distribution des autres.
+
+**Rien de tout cela ne touche au chemin chaud.** `claim()` ne lit ni n'ecrit
+aucun slot de la cagnotte. Le classement n'est pas calcule onchain : il se
+deduit de `getOwners()`, donc d'un etat deja stocke. Compter les points en
+storage aurait coute un compteur global, exactement ce qu'on evite.
 
 ---
 
 ## Les pieges qui tuent la demo
 
-**1. Le gas facture sur le gas_limit.** Voir plus haut. C'est le piege numero un et il ne
-ressemble a rien de connu sur les autres chaines EVM.
+**1. Le gas facture sur le gas_limit.** Voir plus haut. Ca ne ressemble a rien
+de connu sur les autres chaines EVM.
 
-**2. Les limites du RPC public.** `testnet-rpc.monad.xyz` est partage et plafonne, et
-`eth_getLogs` n'accepte que **100 blocs par requete**. Le front borne ses requetes a 90
-blocs et saute en avant s'il a pris du retard : sans ce garde-fou, une coupure de 40
-secondes fige le plateau definitivement alors que la chaine va tres bien. Si ca sature
-quand meme, bascule sur `https://rpc.ankr.com/monad_testnet` dans Reglages, ou prends une
-cle gratuite QuickNode / Alchemy le matin meme.
+**2. Le RPC public.** `eth_getLogs` n'accepte que **100 blocs par requete** —
+verifie, 500 renvoie `413`. Le front borne a 90 blocs et saute en avant s'il a
+pris du retard : sans ce garde-fou, une coupure de 40 secondes fige le plateau
+definitivement alors que la chaine va tres bien.
 
-**3. Les wallets vides.** Faucet plafonne a 0.05 MON pour un wallet vierge. Prevois 2 a 3
-MON d'avance minimum, et arrose a la main avec `fund --extra`.
+Surtout : **le glisse continu n'est bride par aucun delai**, donc un navigateur
+emet 8 a 15 tx/s. Trente navigateurs saturent instantanement un RPC public
+plafonne a 25 req/s. **Une cle QuickNode ou Alchemy gratuite n'est plus
+optionnelle**, a prendre le matin meme. Repli immediat :
+`https://rpc.ankr.com/monad_testnet`.
 
-**4. L'execution asynchrone.** Un compte fraichement approvisionne ne peut pas depenser
-avant environ 1,2 seconde. Ne jamais enchainer `fund` et `spam` sans pause — `fund` fait
-la pause tout seul, mais pas si tu l'interromps.
+**3. Les wallets vides.** Faucet plafonne a 0.05 MON pour un wallet vierge.
+`bot.py refill` est la reponse : il lit les logs, repere les joueurs et recharge
+ceux qui sont sous le seuil, sans que personne ait a donner son adresse.
+
+**4. L'execution asynchrone.** Un compte fraichement approvisionne ne peut pas
+depenser avant environ 1,2 seconde. `fund` et `refill` font la pause tout seuls.
 
 ---
 
 ## Ce qu'il faut dire au jury
 
-- **Une transaction touche exactement deux slots de storage**, indexes l'un par le numero
-  de case, l'autre par l'adresse du joueur. Deux joueurs qui cliquent deux cases
-  differentes n'ont aucun etat commun : rien n'oblige a les executer l'une apres l'autre.
-  C'est le cas favorable de l'EVM parallele.
-- **Aucun compteur global.** Un seul `totalClaims++` aurait suffi a faire passer toutes
-  les transactions du jeu par un meme slot et a les serialiser. Les scores sont recalcules
-  a la lecture. C'est le detail que peu d'equipes verront.
-- **On ne batch pas.** Un clic, une transaction. Sur une chaine a 12 secondes de bloc, ce
-  jeu n'existe pas.
-- **Le reset est en une seule ecriture** : un compteur de manche invalide les 1024 cases
-  d'un coup au lieu de reecrire 1024 slots.
-- Si on te cherche sur le cout : le `gas_limit` est calibre a `eth_estimateGas` + 15 %,
-  parce que Monad facture la limite et pas la consommation. Ca montre que tu as lu la doc.
+- **Une transaction touche exactement deux slots de storage**, indexes l'un par
+  le numero de case, l'autre par l'adresse du joueur. Deux joueurs qui peignent
+  deux cases differentes n'ont aucun etat commun : rien n'oblige a les executer
+  l'une apres l'autre. C'est le cas favorable de l'EVM parallele.
+  `tests/test_invariants.py` le verifie en photographiant le storage avant et
+  apres une pose : aucun slot fixe ne bouge.
+- **Aucun compteur global.** Un seul `totalClaims++` aurait suffi a faire passer
+  toutes les transactions du jeu par un meme slot et a les serialiser. Meme le
+  classement et la cagnotte restent hors du chemin chaud. C'est le detail que
+  peu d'equipes verront.
+- **On ne batch pas.** Une case, une transaction. Sur une chaine a 12 secondes
+  de bloc, ce jeu n'existe pas.
+- **Le reset est en une seule ecriture** : un compteur de manche invalide les
+  1024 cases d'un coup. Mesure : vider un plateau plein coute le meme prix que
+  vider un plateau vide.
+- **Le gas_limit est calibre sur une mesure**, parce que Monad facture la limite
+  et pas la consommation. Le front l'ajuste meme case par case.
 
 Ordre de pitch conseille, 3 minutes :
 
-1. 20 s : le plateau vide au videoprojecteur, en mode `?spectate=1`
-2. 30 s : tu fais scanner le QR code a la salle, tu te tais, le plateau explose
+1. 20 s : le plateau vide au videoprojecteur, en `?spectate=1`
+2. 30 s : tu fais scanner le QR code, tu te tais, le plateau explose
 3. 60 s : le compteur tx/s, et l'explication des deux slots independants
 4. 40 s : l'explorer sur une transaction, une de plus parmi des milliers
-5. 30 s : la suite (escouades, mises, saisons)
+5. 30 s : `payout`, la cagnotte tombe chez les gagnants, le plateau se vide
 
 ---
 
 ## Reglages de derniere minute
 
 ```bash
-.venv/bin/python scripts/deploy.py --reset                  # vide le plateau
-.venv/bin/python scripts/deploy.py --cooldown 3             # mode jeu equitable
-.venv/bin/python scripts/deploy.py --cooldown 0             # debit maximum (defaut demo)
+.venv/bin/python scripts/deploy.py --reset          # vide le plateau
+.venv/bin/python scripts/deploy.py --cooldown 3     # mode jeu equitable
+.venv/bin/python scripts/deploy.py --cooldown 0     # debit maximum (defaut)
 ```
-
-Ou depuis Remix avec le wallet qui a deploye : `reset()`, `setCooldown(0)`, `setCooldown(3)`.
 
 ---
 
 ## Plan B
 
-Des que la demo fonctionne, **enregistre une video de 45 secondes**. Le wifi d'un campus un
-jour de hackathon tombe toujours au pire moment, et un jury pardonne une video, jamais un
-ecran de chargement.
+Des que la demo fonctionne, **enregistre une video de 45 secondes**. Le wifi d'un
+campus un jour de hackathon tombe toujours au pire moment, et un jury pardonne
+une video, jamais un ecran de chargement.
