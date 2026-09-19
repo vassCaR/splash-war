@@ -426,7 +426,7 @@
    CONFIG - remplie automatiquement par scripts/deploy.py
    ===================================================================== */
 const DEFAULTS = {
-  CONTRACT: "",                                  // <-- injecte au deploiement
+  CONTRACT: "0x946C89a2c9c31ab38D245aacf6a10F2703125B25",                                  // <-- injecte au deploiement
   RPC:      "https://testnet-rpc.monad.xyz",     // alt: https://rpc.ankr.com/monad_testnet
   CHAIN_ID: 10143,
   EXPLORER: "https://testnet.monadscan.com",
@@ -440,7 +440,7 @@ const DEFAULTS = {
   // reellement couter, en s'appuyant sur ce que le front sait deja du plateau.
   // Recalibre par scripts/deploy.py sur une mesure eth_estimateGas reelle.
   GAS: {
-    fixed: 27420n,      // intrinseque + calldata + evenement + logique (mesure)
+    fixed: 46130n,      // intrinseque + calldata + evenement + logique (mesure)
     cold:  22100n,      // SSTORE d'un slot encore a zero
     warm:   5000n,      // SSTORE d'un slot deja non nul
     margin:   115n      // pourcentage de marge
