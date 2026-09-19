@@ -8,7 +8,7 @@ def test_constantes(tw, admin):
     assert tw.functions.WIDTH().call() == 48
     assert tw.functions.HEIGHT().call() == 48
     assert tw.functions.CELLS().call() == 2304
-    assert tw.functions.COLORS().call() == 16
+    assert tw.functions.COLORS().call() == 32
     assert tw.functions.epoch().call() == 1
     assert tw.functions.cooldownBlocks().call() == 0   # debit maximum par defaut
     assert tw.functions.admin().call() == admin
@@ -25,13 +25,13 @@ def test_pose_simple(w3, tw, accounts):
 
 def test_toute_la_palette(w3, tw, accounts):
     """Les 16 indices sont acceptes, 0 et 17 sont refuses."""
-    for color in range(1, 17):
+    for color in range(1, 33):
         tw.functions.claim(color, color).transact({"from": accounts[1]})
     board = tw.functions.getColors().call()
-    for color in range(1, 17):
+    for color in range(1, 33):
         assert board[color] == color
 
-    for mauvais in (0, 17, 255):
+    for mauvais in (0, 33, 255):
         expect_revert("BadColor", tw.functions.claim(500, mauvais), {"from": accounts[1]})
 
 

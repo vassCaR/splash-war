@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 /**
  * SplashWar - une grille 48x48 que la salle repeint en temps reel.
  *
- * Regle du jeu : tu choisis une couleur dans une palette de 16, tu cliques ou
+ * Regle du jeu : tu choisis une couleur dans une palette de 32, tu cliques ou
  * tu glisses sur la grille, chaque case traversee prend ta couleur.
  * Une case = une transaction. Pas de batch, pas de rollup, pas d'astuce :
  * on envoie une transaction par case parce que sur Monad on peut se le permettre.
@@ -34,7 +34,7 @@ contract SplashWar {
     uint16 public constant WIDTH = 48;
     uint16 public constant HEIGHT = 48;
     uint16 public constant CELLS = 2304; // WIDTH * HEIGHT
-    uint8 public constant COLORS = 16;
+    uint8 public constant COLORS = 32;
 
     // ---------------------------------------------------------------------
     // Storage
@@ -44,7 +44,7 @@ contract SplashWar {
     /// donc une seule ecriture disque par capture.
     struct Cell {
         address owner; // dernier joueur a avoir peint la case
-        uint8 color; // 1..16, indice dans la palette du front
+        uint8 color; // 1..32, indice dans la palette du front
         uint32 epoch; // manche pendant laquelle la case a ete peinte
     }
 
@@ -163,7 +163,7 @@ contract SplashWar {
     // Lectures (gratuites, utilisees par le front)
     // ---------------------------------------------------------------------
 
-    /// Etat complet du plateau : 2304 entiers, 0 = case vide, 1..16 = couleur.
+    /// Etat complet du plateau : 2304 entiers, 0 = case vide, 1..32 = couleur.
     /// Appele une fois au chargement de la page puis toutes les ~20 secondes
     /// pour resynchroniser, le reste du temps le front suit les evenements.
     function getColors() external view returns (uint8[] memory colors) {
@@ -177,9 +177,9 @@ contract SplashWar {
         }
     }
 
-    /// Nombre de cases par couleur. L'index 0 est inutilise, les scores sont en 1..16.
+    /// Nombre de cases par couleur. L'index 0 est inutilise, les scores sont en 1..32.
     /// Recalcule a la lecture, justement pour ne pas avoir de compteur en storage.
-    function colorScores() external view returns (uint32[17] memory scores) {
+    function colorScores() external view returns (uint32[33] memory scores) {
         uint32 e = epoch;
         for (uint16 i = 0; i < CELLS; i++) {
             Cell storage c = _cells[i];

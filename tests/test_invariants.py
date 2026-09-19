@@ -39,7 +39,7 @@ def test_aucune_ecriture_globale_pendant_une_pose(w3, tw, accounts):
 
     # et cela reste vrai pour des joueurs differents sur des cases differentes
     for i, compte in enumerate(accounts[1:6], start=1):
-        tw.functions.claim(i * 37, (i % 16) + 1).transact({"from": compte})
+        tw.functions.claim(i * 37, (i % 32) + 1).transact({"from": compte})
     assert slots(w3, tw.address) == avant, "une pose a modifie un slot global"
 
 
@@ -186,7 +186,7 @@ def test_la_lecture_du_plateau_reste_gratuite(w3, tw, accounts):
     meme plateau plein, sinon le front se fige pendant la demo.
     """
     for cell in range(0, 2304, 13):
-        tw.functions.claim(cell, (cell % 16) + 1).transact({"from": accounts[1]})
+        tw.functions.claim(cell, (cell % 32) + 1).transact({"from": accounts[1]})
     assert len(tw.functions.getColors().call()) == 2304
     assert len(tw.functions.getOwners().call()) == 2304
     assert sum(tw.functions.colorScores().call()) == len(range(0, 2304, 13))

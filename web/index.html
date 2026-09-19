@@ -224,7 +224,7 @@
   /* Boutons de manette : pastille bombee, liseret sombre, reflet en haut a
      gauche, et enfoncement net au clic. */
   .palette{display:flex;flex-direction:column;gap:9px}
-  .swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+  .swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
   /* Pastilles pixelisees : carre net, ombre dure d'un pixel, aucun degrade.
      Les pastilles bombees juraient avec un plateau en aplats. */
   .sw{
@@ -582,7 +582,7 @@
    CONFIG - remplie automatiquement par scripts/deploy.py
    ===================================================================== */
 const DEFAULTS = {
-  CONTRACT: "0x946C89a2c9c31ab38D245aacf6a10F2703125B25",                                  // <-- injecte au deploiement
+  CONTRACT: "0x458FB580596c971ba54b40244A7Eee90d886dD45",                                  // <-- injecte au deploiement
   RPC:      "https://testnet-rpc.monad.xyz",     // alt: https://rpc.ankr.com/monad_testnet
   CHAIN_ID: 10143,
   EXPLORER: "https://testnet.monadscan.com",
@@ -640,22 +640,38 @@ const W = 48, H = 48, CELLS = W * H;
 /* La palette n'est pas onchain : le contrat ne stocke qu'un indice de 1 a 16.
    Changer ces teintes ne demande aucun redeploiement. */
 const PALETTE = [
-  { id:1,  name:"VIOLET",    hex:"#a855f7" },   // violet principal du logo
-  { id:2,  name:"INDIGO",    hex:"#4318d4" },
-  { id:3,  name:"AZUR",      hex:"#1a67ff" },   // drapeau du logo
-  { id:4,  name:"CIEL",      hex:"#4fc3ff" },
-  { id:5,  name:"TURQUOISE", hex:"#27eddc" },   // drapeau du logo
-  { id:6,  name:"JADE",      hex:"#16c07a" },
-  { id:7,  name:"ACIDE",     hex:"#a8f03c" },
-  { id:8,  name:"OR",        hex:"#ffc33b" },   // drapeau du logo
-  { id:9,  name:"ORANGE",    hex:"#ff8a2b" },
-  { id:10, name:"BRAISE",    hex:"#f4402f" },
-  { id:11, name:"MAGENTA",   hex:"#ff069d" },   // drapeau du logo
-  { id:12, name:"ROSE",      hex:"#ff9ad0" },
-  { id:13, name:"LILAS",     hex:"#d0a8ff" },
-  { id:14, name:"PRUNE",     hex:"#7b3fb0" },
-  { id:15, name:"ARGENT",    hex:"#b9c4e8" },
-  { id:16, name:"NEIGE",     hex:"#fbf5fd" }
+  { id:1 , name:"VIOLET", hex:"#a855f7" },
+  { id:2 , name:"INDIGO", hex:"#4318d4" },
+  { id:3 , name:"AZUR", hex:"#1a67ff" },
+  { id:4 , name:"CIEL", hex:"#4fc3ff" },
+  { id:5 , name:"TURQUOISE", hex:"#27eddc" },
+  { id:6 , name:"JADE", hex:"#16c07a" },
+  { id:7 , name:"ACIDE", hex:"#a8f03c" },
+  { id:8 , name:"OR", hex:"#ffc33b" },
+  { id:9 , name:"ORANGE", hex:"#ff8a2b" },
+  { id:10, name:"BRAISE", hex:"#f4402f" },
+  { id:11, name:"MAGENTA", hex:"#ff069d" },
+  { id:12, name:"ROSE", hex:"#ff9ad0" },
+  { id:13, name:"LILAS", hex:"#d0a8ff" },
+  { id:14, name:"PRUNE", hex:"#7b3fb0" },
+  { id:15, name:"ARGENT", hex:"#c8d2e8" },
+  { id:16, name:"NEIGE", hex:"#fbf5fd" },
+  { id:17, name:"MARRON", hex:"#8b5a2b" },
+  { id:18, name:"CHOCOLAT", hex:"#5a3a1c" },
+  { id:19, name:"SABLE", hex:"#e0c9a0" },
+  { id:20, name:"KAKI", hex:"#9a9550" },
+  { id:21, name:"OLIVE", hex:"#4f6b1f" },
+  { id:22, name:"FORET", hex:"#1e7a3c" },
+  { id:23, name:"MENTHE", hex:"#8ef0b8" },
+  { id:24, name:"PIN", hex:"#0f5f48" },
+  { id:25, name:"MARINE", hex:"#1d4ea8" },
+  { id:26, name:"ARDOISE", hex:"#6f8098" },
+  { id:27, name:"GRIS", hex:"#98a0ad" },
+  { id:28, name:"TAUPE", hex:"#8a7f6e" },
+  { id:29, name:"CORAIL", hex:"#ff7f6e" },
+  { id:30, name:"BORDEAUX", hex:"#9c1840" },
+  { id:31, name:"BRIQUE", hex:"#c25236" },
+  { id:32, name:"JAUNE", hex:"#fff44f" }
 ];
 const COLOR_HEX = ["#12151f", ...PALETTE.map(c => c.hex)];
 const EMPTY_HEX = "#1a0d52";

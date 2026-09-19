@@ -88,10 +88,8 @@ ABI = [
 
 _topic = Web3.keccak(text="Claimed(uint32,uint16,address,uint8)").hex()
 CLAIMED_TOPIC = _topic if _topic.startswith("0x") else "0x" + _topic
-COLOR_NAMES = ["", "ACID", "LIME", "TEAL", "CYAN", "AZUR", "INDIGO", "VIOLET",
-               "MAUVE", "MAGENTA", "ROSE", "ROUGE", "ORANGE", "AMBRE", "JAUNE",
-               "SABLE", "BLANC"]
-COLORS = 16
+COLOR_NAMES = ["", "VIOLET", "INDIGO", "AZUR", "CIEL", "TURQUOISE", "JADE", "ACIDE", "OR", "ORANGE", "BRAISE", "MAGENTA", "ROSE", "LILAS", "PRUNE", "ARGENT", "NEIGE", "MARRON", "CHOCOLAT", "SABLE", "KAKI", "OLIVE", "FORET", "MENTHE", "PIN", "MARINE", "ARDOISE", "GRIS", "TAUPE", "CORAIL", "BORDEAUX", "BRIQUE", "JAUNE"]
+COLORS = 32
 W = H = 48   # doit suivre WIDTH/HEIGHT du contrat
 
 
@@ -739,7 +737,7 @@ def main():
     s = sub.add_parser("spam", help="envoie des captures en continu")
     s.add_argument("--contract", required=True)
     s.add_argument("--rate", type=float, default=30, help="transactions par seconde")
-    s.add_argument("--colors", default="1,4,9,13",
+    s.add_argument("--colors", default="1,5,9,17,21,29",
                    help=f"indices 1..{COLORS} separes par des virgules")
     s.add_argument("--region", help="x0,y0,x1,y1")
     s.add_argument("--duration", type=float, help="secondes, sinon jusqu'a Ctrl-C")
