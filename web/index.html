@@ -54,6 +54,49 @@
   #bgfx canvas{opacity:.9}
   img{image-rendering:pixelated}
 
+  /* ---------- ecran d'accueil ----------
+     Premier contact : le logo en grand, un pseudo, un bouton. Le pseudo n'est
+     PAS ecrit onchain ici : un wallet neuf n'a pas un centime, exiger une
+     transaction avant la premiere case tuerait l'entree dans le jeu. Il est
+     garde en local et propose a l'ecriture une fois le wallet approvisionne. */
+  .accueil{
+    position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:26px;padding:28px 20px 90px;
+    background:
+      radial-gradient(900px 620px at 50% 34%, rgba(107,31,219,.34), transparent 66%),
+      rgba(1,0,16,.985);
+    text-align:center;
+  }
+  .accueil.partie{display:none}
+  .accueil .heros{
+    width:min(78vw,300px);height:auto;
+    filter:drop-shadow(0 0 34px rgba(150,62,245,.55));
+    animation:respire 3.4s ease-in-out infinite;
+  }
+  @keyframes respire{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  .accueil .accroche{
+    color:var(--lilas);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    line-height:2.1;text-shadow:0 2px 8px rgba(0,0,0,.9)
+  }
+  .depart{display:flex;flex-direction:column;gap:12px;width:min(88vw,330px)}
+  .champ-pseudo{
+    text-align:center;font-family:'Press Start 2P',monospace;font-size:12px;
+    padding:15px 10px;letter-spacing:.06em;text-transform:uppercase;
+  }
+  .champ-pseudo::placeholder{color:#5b4a8f;letter-spacing:.04em}
+  .lien{
+    background:none;border:0;color:var(--dim);font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;
+    text-decoration:underline;text-underline-offset:4px;padding:6px
+  }
+  .lien:hover{color:var(--lilas)}
+  .roue{
+    position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+    background:none;border:0;color:var(--violet2);cursor:pointer;padding:10px;
+    transition:transform .25s steps(4), color .15s
+  }
+  .roue:hover{color:var(--lilas);transform:translateX(-50%) rotate(45deg)}
+
   /* ---------- typographies arcade ---------- */
   .arcade{font-family:'Press Start 2P','IBM Plex Mono',monospace;line-height:1.6}
 
@@ -309,6 +352,32 @@
 </head>
 <body>
 <div id="bgfx" aria-hidden="true"></div>
+
+<div id="accueil" class="accueil">
+  <img class="heros" src="logo.png" alt="Splash War" />
+  <p class="accroche">une case = une transaction onchain<br>la salle entiere peint le meme plateau</p>
+
+  <div class="depart">
+    <input id="inPseudoAccueil" class="cfg champ-pseudo" maxlength="16"
+           placeholder="TON PSEUDO" autocomplete="off" spellcheck="false" />
+    <button class="act coin" id="btnStart">PRESS START</button>
+    <button class="lien" id="btnSansPseudo">jouer sans pseudo</button>
+  </div>
+
+  <button class="roue" id="btnReglages" title="Reglages" aria-label="Reglages">
+    <svg viewBox="0 0 16 16" width="34" height="34" shape-rendering="crispEdges">
+      <g fill="currentColor">
+        <rect x="6" y="0" width="4" height="2"/><rect x="6" y="14" width="4" height="2"/>
+        <rect x="0" y="6" width="2" height="4"/><rect x="14" y="6" width="2" height="4"/>
+        <rect x="2" y="2" width="3" height="2"/><rect x="11" y="2" width="3" height="2"/>
+        <rect x="2" y="12" width="3" height="2"/><rect x="11" y="12" width="3" height="2"/>
+        <rect x="4" y="2" width="8" height="2"/><rect x="2" y="4" width="12" height="8"/>
+        <rect x="4" y="12" width="8" height="2"/>
+      </g>
+      <rect x="6" y="6" width="4" height="4" fill="#010010"/>
+    </svg>
+  </button>
+</div>
 <div class="app" id="app">
 
   <section class="stage">
@@ -1066,7 +1135,7 @@ async function chargerIdentite() {
       c.namesOf([wallet.address]),
       c.destinationOf(wallet.address)
     ]);
-    const lisible = depuisBytes32(nom[0]);
+    const lisible = depuisBytes32(nom[0]) || store.get("tw.pseudo", "");
     if (lisible) { $("wName").textContent = lisible; $("inName").value = lisible; }
     majDestination(dest);
   } catch {}
@@ -1149,6 +1218,31 @@ $("btnSave").onclick = () => {
   location.reload();
 };
 
+/* ---------------- ecran d'accueil ----------------
+   Le pseudo saisi ici reste local. Il sera propose a l'ecriture onchain
+   depuis le panneau des que le wallet aura de quoi payer la transaction. */
+function fermerAccueil(pseudo) {
+  if (pseudo) {
+    store.set("tw.pseudo", pseudo);
+    $("wName").textContent = pseudo;
+    $("inName").value = pseudo;
+  }
+  store.set("tw.vu", "1");
+  $("accueil").classList.add("partie");
+  layout();                       // le plateau se dimensionne une fois visible
+}
+
+$("btnStart").onclick = () => fermerAccueil($("inPseudoAccueil").value.trim());
+$("btnSansPseudo").onclick = () => fermerAccueil("");
+$("inPseudoAccueil").addEventListener("keydown", e => {
+  if (e.key === "Enter") fermerAccueil($("inPseudoAccueil").value.trim());
+});
+$("btnReglages").onclick = () => {
+  fermerAccueil($("inPseudoAccueil").value.trim());
+  $("inContract").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("inRpc").focus();
+};
+
 /* ------------------------- boot ------------------------------- */
 if (SPECTATE) {
   // La mise en page du mode projecteur est entierement en CSS (.solo) :
@@ -1158,6 +1252,14 @@ if (SPECTATE) {
   $("credit").textContent = "\u221E";
   $("bezelState").innerHTML = '<span class="chroma blink">SCAN TO PLAY</span>';
 }
+// Deja venu, ou mode projecteur : on saute l'accueil.
+{
+  const dejaVu = store.get("tw.vu", "") === "1";
+  const pseudoLocal = store.get("tw.pseudo", "");
+  if (pseudoLocal) $("inPseudoAccueil").value = pseudoLocal;
+  if (dejaVu || SPECTATE) $("accueil").classList.add("partie");
+}
+
 renderPalette();
 layout();
 addEventListener("resize", layout);
