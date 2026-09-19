@@ -54,3 +54,43 @@ def test_le_front_et_le_bot_parlent_du_meme_contrat():
     appelees = set(re.findall(r'"function (\w+)\(', front))
     manquantes = appelees - onchain
     assert not manquantes, f"le front appelle des fonctions inexistantes : {manquantes}"
+
+
+def test_structure_html_equilibree():
+    """
+    Une balise fermante en trop referme un conteneur trop tot : le reste de la
+    page sort de sa colonne et part en pleine largeur. Le navigateur ne signale
+    rien, la page se charge, et le defaut ne se voit qu'a l'oeil.
+    C'est exactement ce qui est arrive en deplacant un bloc d'une colonne a
+    l'autre. Ce test l'attrape sans avoir a regarder une capture.
+    """
+    from html.parser import HTMLParser
+
+    class Verificateur(HTMLParser):
+        AUTOFERMANTES = {"br", "img", "input", "meta", "link", "hr", "source"}
+
+        def __init__(self):
+            super().__init__()
+            self.pile, self.problemes = [], []
+
+        def handle_starttag(self, tag, attrs):
+            if tag not in self.AUTOFERMANTES:
+                self.pile.append((tag, self.getpos()[0]))
+
+        def handle_endtag(self, tag):
+            if tag in self.AUTOFERMANTES:
+                return
+            if not self.pile:
+                self.problemes.append(f"ligne {self.getpos()[0]} : </{tag}> sans ouverture")
+                return
+            ouvert, ligne = self.pile.pop()
+            if ouvert != tag:
+                self.problemes.append(
+                    f"ligne {self.getpos()[0]} : </{tag}> ferme <{ouvert}> ouvert ligne {ligne}")
+
+    v = Verificateur()
+    with open(os.path.join(ROOT, "web", "index.html")) as f:
+        v.feed(f.read())
+
+    assert not v.problemes, "structure HTML incoherente :\n  " + "\n  ".join(v.problemes)
+    assert not v.pile, "balises jamais fermees : " + str(v.pile)

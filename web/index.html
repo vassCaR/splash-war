@@ -354,7 +354,6 @@
         </div>
       </div>
     </div>
-    </div>
 
     <div class="block">
       <h2>Classement des couleurs</h2>
@@ -486,7 +485,7 @@ const PALETTE = [
   { id:16, name:"NEIGE",     hex:"#fbf5fd" }
 ];
 const COLOR_HEX = ["#12151f", ...PALETTE.map(c => c.hex)];
-const EMPTY_HEX = "#150a45";
+const EMPTY_HEX = "#1a0d52";
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 const ABI = [
@@ -626,7 +625,7 @@ function layout() {
 function draw() {
   if (dirty) {
     const now = performance.now();
-    ctx.fillStyle = "#0b0530";
+    ctx.fillStyle = "#0f0640";
     ctx.fillRect(0, 0, px * W, px * H);
     let live = false;
     for (let i = 0; i < CELLS; i++) {
@@ -647,7 +646,7 @@ function draw() {
 
     // Subdivisions tous les 8 : reperes de lecture sans quadriller chaque case.
     // Un liseré par case hachurait le plateau et cassait les aplats.
-    ctx.fillStyle = "rgba(160,120,255,.13)";
+    ctx.fillStyle = "rgba(180,140,255,.26)";
     for (let k = 8; k < W; k += 8) {
       ctx.fillRect(k * px, 0, 1, px * H);
       ctx.fillRect(0, k * px, px * W, 1);
