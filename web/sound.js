@@ -445,16 +445,16 @@ const TWSound = (() => {
      millisecondes des que l'onglet travaille, et le tempo part en vrille.
      ================================================================== */
 
-  const TEMPO = 132;                       // battements par minute
+  const TEMPO = 96;                        // battements par minute
   const PAS_PAR_TEMPS = 4;                 // doubles croches
   const HORIZON = 0.12;                    // secondes programmees a l'avance
-  const VOLUME_MUSIQUE = 0.16;             // sous les bruitages, c'est un fond
+  const VOLUME_MUSIQUE = 0.10;             // un fond, pas un accompagnement
 
   // Degres en demi-tons depuis la fondamentale. Quatre mesures.
   const BASSE   = [0,0,7,0, 5,5,0,5, 3,3,10,3, 7,7,5,7];
   const ARPEGE  = [12,15,19,22, 17,20,24,20, 15,19,22,19, 19,22,26,22];
-  const CAISSE  = [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,1,0,0];
-  const CHARLEY = [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,1,1];
+  const CAISSE  = [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0];
+  const CHARLEY = [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0];
 
   let musiqueActive = false, pas = 0, prochainTemps = 0, horloge = null;
   let busMusique = null;
@@ -515,9 +515,10 @@ const TWSound = (() => {
 
   function jouerPas(i, t) {
     const n = i % 16;
-    noteMusique(note(BASSE[n]) / 2, "square", 0.16, 0.30, t, 0);
+    noteMusique(note(BASSE[n]) / 2, "triangle", 0.30, 0.26, t, 0);
     // L'arpege ne joue pas tous les pas : ca respire, et ca coute moins cher.
-    if (n % 2 === 0) noteMusique(note(ARPEGE[n]), "triangle", 0.13, 0.22, t, 6);
+    // L'arpege ne tombe qu'un pas sur quatre : ca respire au lieu de marteler.
+    if (n % 4 === 0) noteMusique(note(ARPEGE[n]), "sine", 0.42, 0.20, t, 5);
     if (CAISSE[n]) percussion(t, true);
     if (CHARLEY[n]) percussion(t, false);
   }
